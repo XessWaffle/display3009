@@ -74,17 +74,15 @@ void BladeManager::Step(){
       blade.omega = 2 * PI / dt;
       blade.lastReadTime = currentStep;
       blade.theta = 0;
-
-      if(blade.omega >= BLADE_START_OMEGA){
-        this->_state == SpinState::SPINNING;
-      }
     }
   }
 
   this->_prevHallState = hallState;
 
   if(this->_state == SpinState::STARTING){
-    if(currentStep - this->_lastStepped >= BLADE_START_DELAY){
+    if(blade.omega >= BLADE_START_OMEGA){
+      this->_state = SpinState::SPINNING;
+    } else if(currentStep - this->_lastStepped >= BLADE_START_DELAY){
       this->_motorWriteValue = this->_motorWriteValue != BLADE_START_PWM ? BLADE_START_PWM : BLADE_STOP_PWM;
       this->_lastStepped = millis();
     }
