@@ -65,23 +65,26 @@ void BladeManager::Step(){
 
   char buff[255];
 
-  sprintf(buff, "%d, %f, %f\n", this->_motorWriteValue, blade.omega, blade.theta);
+  sprintf(buff, "%d, %d, %f, %f\n", this->_state, this->_motorWriteValue, blade.omega, blade.theta);
   Serial.print(buff);  
 
-  if(hallState && !prevHallState){
+  if(hallState && !this->_prevHallState){
     long dt = currentStep - blade.lastReadTime;
-    if(dt > ISR_HALL_DT){
+    if(dt > HALL_DEBOUNCE_DT){
       blade.omega = 2 * PI / dt;
       blade.lastReadTime = currentStep;
+      blade.theta = 0;
+
+      if(blade.omega >= BLADE_START_OMEGA){
+        this->_state == SpinState::SPINNING;
+      }
     }
   }
 
   this->_prevHallState = hallState;
 
   if(this->_state == SpinState::STARTING){
-    if(currentStep - blade.lastReadTime <= BLADE_START_DT){
-      this->_state == SpinState::SPINNING;
-    } else if(currentStep - this->_lastStepped >= BLADE_START_DELAY){
+    if(currentStep - this->_lastStepped >= BLADE_START_DELAY){
       this->_motorWriteValue = this->_motorWriteValue != BLADE_START_PWM ? BLADE_START_PWM : BLADE_STOP_PWM;
       this->_lastStepped = millis();
     }
@@ -96,13 +99,17 @@ void BladeManager::Step(){
     }
 
   } else if(this->_state == SpinState::STOPPING){
-    if(currentStep - blade.lastReadTime >= BLADE_START_DT){
+    if(blade.omega < BLADE_START_OMEGA){
       this->_motorWriteValue = BLADE_STOP_PWM;
       this->_state = SpinState::STOPPED;
     } else {
       this->_motorWriteValue -= this->_motorWriteValue >= BLADE_STOP_PWM;
     }
+  } else if(this->_state == SpinState::STOPPED){
+    blade.omega = 0;
+    blade.theta = 0;
   }
+
 
   this->_motor.writeMicroseconds(this->_motorWriteValue);
 

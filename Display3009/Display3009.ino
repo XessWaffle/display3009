@@ -22,10 +22,18 @@ BladeManager bladeManager(MOTOR_PIN, HALL_PIN);
 void setup() {
   Serial.begin(115200);
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);  // GRB ordering is typical
-  bladeManager.SetTargetVelocity(20);
+  bladeManager.SetTargetVelocity(30);
   //bladeManager.StartBlade();
 }
 
-void loop() { 
+void loop() {
+
+  if(Serial.available() != 0){
+    String str = Serial.readString();
+    str.trim();
+    if(str == "start") bladeManager.StartBlade();
+    if(str == "stop") bladeManager.StopBlade();
+  }
+
   bladeManager.Step();
 }

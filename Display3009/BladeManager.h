@@ -4,11 +4,12 @@
 #include <ESP32Servo.h>
 #include <Arduino.h>
 
-#define ISR_HALL_DT 15
+#define HALL_DEBOUNCE_DT 15
+#define HALL_STOPPED_DT 3000
 #define BLADE_START_PWM 1310
 #define BLADE_STOP_PWM 1000
 #define BLADE_MAX_PWM 1450
-#define BLADE_START_DT 250
+#define BLADE_START_OMEGA 0.02
 #define BLADE_START_DELAY 3000
 
 struct Blade{
