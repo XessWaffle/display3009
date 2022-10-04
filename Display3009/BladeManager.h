@@ -17,7 +17,6 @@ struct Blade{
 };
 
 extern void IRAM_ATTR isr_integrator();
-extern void IRAM_ATTR isr_hall();
 
 // Interrupts
 extern hw_timer_t *timer;
@@ -44,6 +43,8 @@ class BladeManager{
     int _motorPin, _hallPin;
     int _motorWriteValue;
     int _state = SpinState::STOPPED;
+
+    bool _prevHallState = false;
 
     long _lastStepped;
     

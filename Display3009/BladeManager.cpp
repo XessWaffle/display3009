@@ -61,18 +61,22 @@ double BladeManager::GetAngularPosition(){
 void BladeManager::Step(){
   long currentStep = millis();
 
+  long hallState = analogRead(this->_hallPin) == 0;
+
   char buff[255];
 
   sprintf(buff, "%d, %f, %f\n", this->_motorWriteValue, blade.omega, blade.theta);
   Serial.print(buff);  
 
-  if(analogRead(this->_hallPin) == 0){
+  if(hallState && !prevHallState){
     long dt = currentStep - blade.lastReadTime;
     if(dt > ISR_HALL_DT){
       blade.omega = 2 * PI / dt;
       blade.lastReadTime = currentStep;
     }
   }
+
+  this->_prevHallState = hallState;
 
   if(this->_state == SpinState::STARTING){
     if(currentStep - blade.lastReadTime <= BLADE_START_DT){
