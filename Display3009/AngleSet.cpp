@@ -10,11 +10,10 @@ AngleSet::AngleSet(int divisions){
   this->Initialize();
 }
 
-void AngleSet::AddCallback(double theta, void (*onAngleReached)()){
-  double upper = theta + noise, lower = theta - noise;
+void AngleSet::AddCallback(double theta, void* (*onAngleReached)()){
   unsigned int index = (unsigned int) (this->_divisions * theta / (2 * PI));
 
-  struct AngularCallback *last = this->_set[index];
+  struct AngularCallback *last = &this->_set[index];
 
   while(last->next != NULL) last = last->next;
 
@@ -42,14 +41,13 @@ AngularCallback* AngleSet::GetCallback(double theta, double noise){
   double upper = theta + noise, lower = theta - noise;
   unsigned int index = (unsigned int) (this->_divisions * theta / (2 * PI));
 
-  struct AngularCallback *head = this->_set[index], *iter = head, *requested = NULL;
+  struct AngularCallback *head = &(this->_set[index]), *iter = head, *requested = NULL;
 
   while(iter != NULL){
     
     struct AngularCallback *prev = iter->prev, *next = iter->next;
 
     if(iter->theta < upper && iter->theta > lower){
-      iter->last = NULL;
       if(requested == NULL){
         requested = iter;
       } else {
@@ -71,10 +69,10 @@ void AngleSet::Initialize(){
   this->_set = (AngularCallback*) malloc(_divisions * sizeof(struct AngularCallback));
 
   for(int i = 0; i < _divisions; i++){
-    this->_set[i]->theta = 0.0;
-    this->_set[i]->callback = NULL;
-    this->_set[i]->next = NULL;
-    this->_set[i]->prev = NULL;
+    this->_set[i].theta = 0.0;
+    this->_set[i].onAngleReached = NULL;
+    this->_set[i].next = NULL;
+    this->_set[i].prev = NULL;
   }
 
 }

@@ -23,7 +23,7 @@ void setup() {
   Serial.begin(115200);
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);  // GRB ordering is typical
   bladeManager.SetTargetVelocity(20);
-  bladeManager.Start();
+  //bladeManager.StartBlade();
 }
 
 void loop() { 

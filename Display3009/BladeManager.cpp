@@ -1,18 +1,12 @@
 #include "BladeManager.h"
 
+extern hw_timer_t *timer = NULL;
+extern portMUX_TYPE critMux = portMUX_INITIALIZER_UNLOCKED;
+struct Blade blade;
+
 void IRAM_ATTR isr_integrator(){
   portENTER_CRITICAL(&critMux);
   blade.theta += blade.omega * 0.01;
-  portEXIT_CRITICAL(&critMux);
-}
-
-void IRAM_ATTR isr_hall(){
-  portENTER_CRITICAL(&critMux);
-  long dt = millis() - blade.lastReadTime;
-  if(dt > ISR_HALL_DT){
-    omega = 2 * PI / dt;
-    blade.lastReadTime = time;
-  }
   portEXIT_CRITICAL(&critMux);
 }
 
@@ -28,29 +22,26 @@ BladeManager::BladeManager(int motorPin, int hallPin){
   this->_desiredOmega = 0;
   this->_motorWriteValue = BLADE_STOP_PWM;
 
-  blade.motor.attach(this->_motorPin);
+  this->_motor.attach(motorPin);
 
-  blade.writeMicroseconds(2000);
+  this->_motor.writeMicroseconds(2000);
   delay(100);
-  blade.writeMicroseconds(1000);
+  this->_motor.writeMicroseconds(1000);
   delay(100);
 
   timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &isr_integrator, true);
   timerAlarmWrite(timer, 10, true);
   timerAlarmEnable(timer);
-  
-  pinMode(this->_hallPin, INPUT);
-  attachInterrupt(this->_hallPin, &isr_hall, FALLING);
 }
 
-bool BladeManager::Start(){
-  _state = SpinState::STARTING;
+void BladeManager::StartBlade(){
+  this->_state = SpinState::STARTING;
 }
 
 
-bool BladeManager::Stop(){
-  _state = SpinState::STOPPING;
+void BladeManager::StopBlade(){
+  this->_state = SpinState::STOPPING;
 }
 
 // Blade API
@@ -68,16 +59,27 @@ double BladeManager::GetAngularPosition(){
 
 
 void BladeManager::Step(){
-  Servo* motor = &(blade.motor);
   long currentStep = millis();
+
+  char buff[255];
+
+  sprintf(buff, "%d, %f, %f\n", this->_motorWriteValue, blade.omega, blade.theta);
+  Serial.print(buff);  
+
+  if(analogRead(this->_hallPin) == 0){
+    long dt = currentStep - blade.lastReadTime;
+    if(dt > ISR_HALL_DT){
+      blade.omega = 2 * PI / dt;
+      blade.lastReadTime = currentStep;
+    }
+  }
 
   if(this->_state == SpinState::STARTING){
     if(currentStep - blade.lastReadTime <= BLADE_START_DT){
-      this->_state == Spinstate::SPINNING;
-    } else if(currentStep - lastStepped >= BLADE_START_DELAY){
-      this->_motorWriteValue = this->_motorWriteValue == BLADE_START_PWM ? BLADE_STOP_PWM : BLADE_START_PWM;
-      motor->writeMicroseconds(this->_motorWriteValue);
-      lastStepped = millis();
+      this->_state == SpinState::SPINNING;
+    } else if(currentStep - this->_lastStepped >= BLADE_START_DELAY){
+      this->_motorWriteValue = this->_motorWriteValue != BLADE_START_PWM ? BLADE_START_PWM : BLADE_STOP_PWM;
+      this->_lastStepped = millis();
     }
   } else if(this->_state == SpinState::SPINNING){
     double desiredOmegaMS = this->_desiredOmega * 0.001;
@@ -89,8 +91,6 @@ void BladeManager::Step(){
       this->_motorWriteValue -= this->_motorWriteValue >= BLADE_STOP_PWM;
     }
 
-    motor->writeMicroseconds(this->_motorWriteValue);
-
   } else if(this->_state == SpinState::STOPPING){
     if(currentStep - blade.lastReadTime >= BLADE_START_DT){
       this->_motorWriteValue = BLADE_STOP_PWM;
@@ -98,8 +98,8 @@ void BladeManager::Step(){
     } else {
       this->_motorWriteValue -= this->_motorWriteValue >= BLADE_STOP_PWM;
     }
-
-    motor->writeMicroseconds(this->_motorWriteValue);
   }
+
+  this->_motor.writeMicroseconds(this->_motorWriteValue);
 
 }

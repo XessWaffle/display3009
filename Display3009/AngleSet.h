@@ -2,6 +2,8 @@
 #define ANGLE_SET_H
 #define PI 3.14159265359
 
+#include <Arduino.h>
+
 typedef void *(*callback)();
 
 struct AngularCallback{
@@ -17,7 +19,7 @@ class AngleSet{
     AngleSet();
     AngleSet(int divisions);
 
-    void AddCallback(double theta, void (*onAngleReached)());
+    void AddCallback(double theta, void* (*onAngleReached)());
     void RemoveCallback(double theta, double noise);
     AngularCallback* GetCallback(double theta, double noise);
 
@@ -27,6 +29,7 @@ class AngleSet{
   private:
     AngularCallback *_set;
     int _divisions;
-}
+};
 
+#endif
 
