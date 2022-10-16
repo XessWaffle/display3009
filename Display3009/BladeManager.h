@@ -7,13 +7,10 @@
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 
-#define LIS331_POWER 16
-#define LIS331_GND 4
-
 #define BLADE_STOP_PWM 1000
 #define BLADE_MAX_PWM 1450
-#define MPU_RADIUS 0.085
-#define HPM_RADIUS 0.124
+#define MPU_RADIUS 0.084
+#define HPM_RADIUS 0.109
 
 #define BLADE_UPDATE_DELAY 50
 

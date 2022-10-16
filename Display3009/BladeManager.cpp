@@ -24,12 +24,6 @@ BladeManager::BladeManager(){
 }
 BladeManager::BladeManager(int motorPin){
 
-  pinMode(LIS331_POWER, OUTPUT);
-  pinMode(LIS331_GND, OUTPUT);
-
-  digitalWrite(LIS331_POWER, HIGH);
-  digitalWrite(LIS331_GND, LOW);
-
   this->_motorPin = motorPin;
   this->_motorWriteValue = BLADE_STOP_PWM;
 
@@ -41,10 +35,10 @@ BladeManager::BladeManager(int motorPin){
     _mpu.setAccelerometerRange(MPU6050_RANGE_16_G);
     _mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
   }
-  /*_xl.setI2CAddr(0x19);
+  _xl.setI2CAddr(0x19);
   _xl.begin(LIS331::USE_I2C);
   _xl.setODR(LIS331::DR_1000HZ);
-  _xl.setFullScale(LIS331::LOW_RANGE);*/
+  _xl.setFullScale(LIS331::LOW_RANGE);
   
 
   timer = timerBegin(0, 80, true);
@@ -108,21 +102,17 @@ void BladeManager::Step(){
   sensors_event_t a, g, temp;
   int16_t x, y, z;
   _mpu.getEvent(&a, &g, &temp);
-  //_xl.readAxes(x, y, z);
- //float xly = _xl.convertToG(LIS331::LOW_RANGE, y);
+  _xl.readAxes(x, y, z);
+  float xly = _xl.convertToG(LIS331::LOW_RANGE, y);
 
   double omegaLow = sqrt(abs(a.acceleration.y)/MPU_RADIUS);
-  double omegaHigh = 0.0; //sqrt(abs(xly)/HPM_RADIUS);
+  double omegaHigh = sqrt(abs(xly)/HPM_RADIUS);
   double omega = omegaLow > BLADE_SATURATION_OMEGA ? omegaHigh : omegaLow;
   portENTER_CRITICAL(&critMux);
   _blade.omega = omega;
   portEXIT_CRITICAL(&critMux);
 
-  Serial.print(a.acceleration.x);
-  Serial.print(" ");
-  Serial.println(a.acceleration.y);
-  Serial.print(" ");
-  Serial.println(a.acceleration.z);
+  //Serial.printf("Low (%.2f): (%.2f, %.2f, %.2f) | High (%.2f) : (%d, %d, %d)\n", omegaLow, a.acceleration.x, a.acceleration.y, a.acceleration.z, omegaHigh, x, y, z);
 
   if(this->_state == SpinState::STARTING){
     if(omega > BLADE_START_OMEGA){

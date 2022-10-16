@@ -110,7 +110,7 @@ void setup() {
   connect();
 
   bladeManager = BladeManager(MOTOR_PIN);
-  bladeManager.SetTarget(1300);
+  bladeManager.SetTarget(1250);
   //bladeManager.StartBlade();
 
   Serial.println("Ready");
@@ -188,7 +188,6 @@ void loop() {
 
     FastLED.show();
   }
-
 
   bladeManager.Step();
 }
