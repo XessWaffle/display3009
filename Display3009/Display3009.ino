@@ -1,8 +1,10 @@
 #include <FastLED.h>
 #include <ESP32Servo.h>
 #include <WiFi.h>
-#include "AngleSet.h"
 #include "BladeManager.h" 
+#include "BladeFrameIterator.h"
+
+#define ANGULAR_FRAME_NOISE 0.005
 
 // How many leds in your strip?
 #define NUM_LEDS 41
@@ -35,11 +37,13 @@ uint8_t createWriteInstruction(uint8_t inst){
 #define DATA createReadInstruction(0x04)
 #define STATE createReadInstruction(0x05)
 #define TOGGLE createWriteInstruction(0x06)
+#define MULTIPLIER createWriteInstruction(0x07)
 
 // Define the array of leds
-CRGB primary[NUM_LEDS], follower[NUM_LEDS];
+struct CRGB primary[NUM_LEDS], follower[NUM_LEDS];
 
 BladeManager bladeManager;
+BladeFrameIterator frameIterator;
 
 const char* ssid     = "3009 Xess";
 const char* password = "dingd0ngditch";
@@ -49,10 +53,6 @@ const char* host = XESSAMD;
 WiFiClient client;
 
 bool on = false, toggled = false;
-
-bool isWithin(double value, double check, double noise){
-  return (value < (check + noise) && value > (check - noise));
-}
 
 void connect(){
   if (!client.connect(host, port)) {
@@ -70,7 +70,7 @@ void writeInstruction(const char* instStr, uint8_t inst){
 
 void onRefresh(){
   Serial.println("Refresh Requested");
-  client.write((uint8_t) 7);
+  client.write((uint8_t) 8);
   writeInstruction("throttle", THROTTLE);
   writeInstruction("start", START);
   writeInstruction("stop", STOP);
@@ -78,6 +78,7 @@ void onRefresh(){
   writeInstruction("data", DATA);
   writeInstruction("state", STATE);
   writeInstruction("toggle", TOGGLE);
+  writeInstruction("multiplier", MULTIPLIER);
 }
 
 void onDisconnect(){
@@ -87,6 +88,7 @@ void onDisconnect(){
 
 void setup() {
   Serial.begin(115200);
+
   FastLED.addLeds<WS2812B, PRIMARY_PIN, GRB>(primary, NUM_LEDS);  // GRB ordering is typical
   FastLED.addLeds<WS2812B, FOLLOWER_PIN, GRB>(follower, NUM_LEDS);
   
@@ -111,7 +113,38 @@ void setup() {
 
   bladeManager = BladeManager(MOTOR_PIN);
   bladeManager.SetTarget(1250);
-  //bladeManager.StartBlade();
+
+
+  ArmFrame* a1 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
+  ArmFrame* a2 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
+  ArmFrame* a3 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
+
+  Serial.println("Created Arm Frame");
+
+  for(int i = 0; i < NUM_LEDS; i++){
+    if(i > 30){
+      a1->SetLED(i, CRGB::Red);
+      a2->SetLED(i, CRGB::White);
+      a3->SetLED(i, CRGB::Blue);
+    } else {
+      a1->SetLED(i, CRGB::Black);
+      a2->SetLED(i, CRGB::Black);
+      a3->SetLED(i, CRGB::Black);
+    }
+  }
+
+  Serial.println("Updated Colors for Arm Frame");
+  
+  BladeFrame *f1 = new BladeFrame();
+
+  f1->AddArmFrame(a1, 0.0);
+  f1->AddArmFrame(a2, TWO_PI/3.0);
+  f1->AddArmFrame(a3, 2 * TWO_PI/3.0);
+
+  Serial.println("Created and copied Frames");
+
+  frameIterator = BladeFrameIterator(BladeFrameIterator::LOOP);
+  frameIterator.AddFrame(f1);
 
   Serial.println("Ready");
 }
@@ -137,8 +170,8 @@ void loop() {
     } else if(byte == TEST){
       client.print("Ready!\r");
     } else if(byte == DATA){
-      char buff[15];
-      sprintf(buff, "%.2f %.2f\r", bladeManager.GetAngularPosition(), bladeManager.GetAngularVelocity());
+      char buff[30];
+      sprintf(buff, "%.2f %.2f %.2f %.2f\r", bladeManager.GetAngularPosition(), bladeManager.GetAngularVelocity(), bladeManager.GetLowAngularVelocity(), bladeManager.GetHighAngularVelocity());
       client.print(buff);
     } else if(byte == THROTTLE){
       int throttle;
@@ -158,36 +191,27 @@ void loop() {
       client.print(buff);
     } else if(byte == TOGGLE){
       on = !on;
-      toggled = true;
-    } 
+    } else if(byte == MULTIPLIER){
+      int multiplier;
+      client.readBytes((char*) &multiplier, sizeof(int));
+      bladeManager.SetDriftMultiplier((double) multiplier * MULTIPLIER_DIVISIONS);
+    }
 
   }
 
-  if(on){
-    if(bladeManager.IsRotationComplete()){
-      for(int i = 0; i < NUM_LEDS; i++){
+  double theta = bladeManager.Step();
+  BladeFrame *curr = frameIterator.Step();
 
-        CRGB rand((uint8_t) random(0, 255),(uint8_t) random(0, 255),(uint8_t) random(0, 255));
+  ArmFrame *primaryFrame = curr->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
+  theta += PI;
+  if(theta >= TWO_PI) theta -= TWO_PI;
+  ArmFrame *followerFrame = curr->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
 
-        primary[i] = rand;
-        follower[i] = rand;
-      }
-    } else {
-      for(int i = 0; i < NUM_LEDS; i++){
-        primary[i] = CRGB::Black;
-        follower[i] = CRGB::Black;
-      }
-    }
+  if(primaryFrame != NULL) 
+    primaryFrame->Trigger(primary);
 
-    FastLED.show();
-  } else {
-    for(int i = 0; i < NUM_LEDS; i++){
-      primary[i] = CRGB::Black;
-      follower[i] = CRGB::Black;
-    }
+  if(followerFrame != NULL)
+    followerFrame->Trigger(follower);
 
-    FastLED.show();
-  }
 
-  bladeManager.Step();
 }

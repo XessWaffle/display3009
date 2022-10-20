@@ -12,7 +12,7 @@ void IRAM_ATTR isr_integrator(){
   portENTER_CRITICAL(&critMux);
   _blade.theta += _blade.omega * 0.00005;
   if(_blade.theta > TWO_PI){
-    _blade.theta -= TWO_PI;
+    _blade.theta = 0;
     _blade.rotationComplete = true;
   }
   portEXIT_CRITICAL(&critMux);
@@ -22,6 +22,7 @@ void IRAM_ATTR isr_integrator(){
 BladeManager::BladeManager(){
 
 }
+
 BladeManager::BladeManager(int motorPin){
 
   this->_motorPin = motorPin;
@@ -73,9 +74,27 @@ void BladeManager::SetTarget(int write){
   this->_desiredWrite = write;
 }
 
+void BladeManager::SetDriftMultiplier(double multiplier){
+  this->_driftMultiplier = multiplier;
+}
+
 double BladeManager::GetAngularVelocity(){
   portENTER_CRITICAL(&critMux);
   double omega = _blade.omega;
+  portEXIT_CRITICAL(&critMux);
+  return omega;
+}
+
+double BladeManager::GetLowAngularVelocity(){
+  portENTER_CRITICAL(&critMux);
+  double omega = _blade.omegaLow;
+  portEXIT_CRITICAL(&critMux);
+  return omega;
+}
+
+double BladeManager::GetHighAngularVelocity(){
+  portENTER_CRITICAL(&critMux);
+  double omega = _blade.omegaHigh;
   portEXIT_CRITICAL(&critMux);
   return omega;
 }
@@ -87,6 +106,43 @@ double BladeManager::GetAngularPosition(){
   return theta;
 }
 
+
+double BladeManager::GetCachedData(sensor sensor, sensorData dataType, axis axis){
+  if(sensor == DATA_LOW){
+    if(dataType == TEMPERATURE){
+      return this->_lowTemp.temperature;
+    } else if(dataType == GYRO){
+      if(axis == X){
+        return this->_lowGyro.gyro.x;
+      } else if(axis == Y){
+        return this->_lowGyro.gyro.y;
+      } else if(axis == Z){
+        return this->_lowGyro.gyro.z;
+      }
+    } else if(dataType == ACCELERATION){
+      if(axis == X){
+        return this->_lowAcceleration.acceleration.x;
+      } else if(axis == Y){
+        return this->_lowAcceleration.acceleration.y;
+      } else if(axis == Z){
+        return this->_lowAcceleration.acceleration.z;
+      }
+    }
+  } else {
+    if(dataType == ACCELERATION){
+      if(axis == X){
+        return this->_highX;
+      } else if(axis == Y){
+        return this->_highY;
+      } else if(axis == Z){
+        return this->_highZ;
+      }
+    }
+  }
+
+  return 0.0;
+}
+
 bool BladeManager::IsRotationComplete(){
   portENTER_CRITICAL(&critMux);
   bool complete = _blade.rotationComplete;
@@ -95,22 +151,36 @@ bool BladeManager::IsRotationComplete(){
   return complete;
 }
 
-void BladeManager::Step(){
+double BladeManager::Step(){
 
   long currentStep = millis();
 
   sensors_event_t a, g, temp;
-  int16_t x, y, z;
   _mpu.getEvent(&a, &g, &temp);
+
+  int16_t x, y, z;
   _xl.readAxes(x, y, z);
-  float xly = _xl.convertToG(LIS331::LOW_RANGE, y);
+  float xlx = _xl.convertToG(LOW_RANGE_G, x), xly = _xl.convertToG(LOW_RANGE_G, y), xlz = _xl.convertToG(LOW_RANGE_G, z);
 
   double omegaLow = sqrt(abs(a.acceleration.y)/MPU_RADIUS);
-  double omegaHigh = sqrt(abs(xly)/HPM_RADIUS);
+  double omegaHigh = sqrt(abs(xly)/HPM_RADIUS) * _driftMultiplier;
   double omega = omegaLow > BLADE_SATURATION_OMEGA ? omegaHigh : omegaLow;
+  double theta = 0.0;
+
   portENTER_CRITICAL(&critMux);
   _blade.omega = omega;
+  _blade.omegaLow = omegaLow;
+  _blade.omegaHigh = omegaHigh;
+  theta = _blade.theta;
   portEXIT_CRITICAL(&critMux);
+
+  this->_lowAcceleration = a;
+  this->_lowGyro = g;
+  this->_lowTemp = temp;
+
+  this->_highX = xlx;
+  this->_highY = xly;
+  this->_highZ = xlz;
 
   //Serial.printf("Low (%.2f): (%.2f, %.2f, %.2f) | High (%.2f) : (%d, %d, %d)\n", omegaLow, a.acceleration.x, a.acceleration.y, a.acceleration.z, omegaHigh, x, y, z);
 
@@ -148,5 +218,5 @@ void BladeManager::Step(){
     this->_motorWriteValue = BLADE_STOP_PWM;
   }
   _motor.writeMicroseconds(this->_motorWriteValue);
-
+  return theta;
 }
