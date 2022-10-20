@@ -4,8 +4,6 @@
 #include "BladeManager.h" 
 #include "BladeFrameIterator.h"
 
-#define ANGULAR_FRAME_NOISE 0.005
-
 // How many leds in your strip?
 #define NUM_LEDS 41
 
@@ -146,6 +144,8 @@ void setup() {
   frameIterator = BladeFrameIterator(BladeFrameIterator::LOOP);
   frameIterator.AddFrame(f1);
 
+  bladeManager.SetTrigger(frameIterator.GetFrame(), primary, follower);
+
   Serial.println("Ready");
 }
 
@@ -199,19 +199,9 @@ void loop() {
 
   }
 
-  double theta = bladeManager.Step();
-  BladeFrame *curr = frameIterator.Step();
-
-  ArmFrame *primaryFrame = curr->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
-  theta += PI;
-  if(theta >= TWO_PI) theta -= TWO_PI;
-  ArmFrame *followerFrame = curr->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
-
-  if(primaryFrame != NULL) 
-    primaryFrame->Trigger(primary);
-
-  if(followerFrame != NULL)
-    followerFrame->Trigger(follower);
-
+  bladeManager.Step();
+  if(frameIterator.Step()){
+    bladeManager.SetTrigger(frameIterator.GetFrame(), primary, follower);
+  }
 
 }

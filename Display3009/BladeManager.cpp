@@ -10,10 +10,21 @@ hw_timer_t *timer;
 
 void IRAM_ATTR isr_integrator(){
   portENTER_CRITICAL(&critMux);
-  _blade.theta += _blade.omega * 0.00005;
+  _blade.theta += _blade.omega * 0.0015;
+
   if(_blade.theta > TWO_PI){
     _blade.theta = 0;
-    _blade.rotationComplete = true;
+  }
+
+  if(_blade.currFrame != NULL){
+    double theta = _blade.theta;
+    ArmFrame *primaryFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
+    theta += PI;
+    if(theta >= TWO_PI) theta -= TWO_PI;
+    ArmFrame *followerFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
+
+    if(primaryFrame != NULL) primaryFrame->Trigger(_blade.primary);
+    if(followerFrame != NULL) followerFrame->Trigger(_blade.follower);
   }
   portEXIT_CRITICAL(&critMux);
 }
@@ -44,7 +55,7 @@ BladeManager::BladeManager(int motorPin){
 
   timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &isr_integrator, true);
-  timerAlarmWrite(timer, 50, true);
+  timerAlarmWrite(timer, 1500, true);
   timerAlarmEnable(timer);
 
   _motor.attach(motorPin);
@@ -70,6 +81,14 @@ void BladeManager::StopBlade(){
 }
 
 // Blade API
+void BladeManager::SetTrigger(BladeFrame *frame, struct CRGB *primary, struct CRGB *follower){
+  portENTER_CRITICAL(&critMux);
+  _blade.currFrame = frame;
+  _blade.primary = primary;
+  _blade.follower = follower;
+  portEXIT_CRITICAL(&critMux);
+}
+
 void BladeManager::SetTarget(int write){
   this->_desiredWrite = write;
 }
@@ -143,15 +162,7 @@ double BladeManager::GetCachedData(sensor sensor, sensorData dataType, axis axis
   return 0.0;
 }
 
-bool BladeManager::IsRotationComplete(){
-  portENTER_CRITICAL(&critMux);
-  bool complete = _blade.rotationComplete;
-  _blade.rotationComplete = false;
-  portEXIT_CRITICAL(&critMux);
-  return complete;
-}
-
-double BladeManager::Step(){
+void BladeManager::Step(){
 
   long currentStep = millis();
 
@@ -165,13 +176,11 @@ double BladeManager::Step(){
   double omegaLow = sqrt(abs(a.acceleration.y)/MPU_RADIUS);
   double omegaHigh = sqrt(abs(xly)/HPM_RADIUS) * _driftMultiplier;
   double omega = omegaLow > BLADE_SATURATION_OMEGA ? omegaHigh : omegaLow;
-  double theta = 0.0;
 
   portENTER_CRITICAL(&critMux);
   _blade.omega = omega;
   _blade.omegaLow = omegaLow;
   _blade.omegaHigh = omegaHigh;
-  theta = _blade.theta;
   portEXIT_CRITICAL(&critMux);
 
   this->_lowAcceleration = a;
@@ -218,5 +227,4 @@ double BladeManager::Step(){
     this->_motorWriteValue = BLADE_STOP_PWM;
   }
   _motor.writeMicroseconds(this->_motorWriteValue);
-  return theta;
 }

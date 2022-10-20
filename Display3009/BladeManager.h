@@ -8,6 +8,7 @@
 #include <Wire.h>
 #include "BladeFrame.h"
 
+#define ANGULAR_FRAME_NOISE 0.005
 
 #define MULTIPLIER_LOW 1.0
 #define MULTIPLIER_DIVISIONS 0.001
@@ -30,7 +31,9 @@ struct Blade{
   double omega, theta;
   double omegaLow, omegaHigh;
   unsigned long lastReadTime;
-  bool rotationComplete = false;
+
+  BladeFrame *currFrame = NULL;
+  struct CRGB *primary = NULL, *follower = NULL;
 };
 
 extern void IRAM_ATTR isr_integrator();
@@ -57,17 +60,17 @@ class BladeManager{
     int GetState();
 
     // Blade API
+    void SetTrigger(BladeFrame *frame, struct CRGB *primary, struct CRGB *follower);
     void SetTarget(int write);
     void SetDriftMultiplier(double multiplier);
+
     double GetAngularVelocity();
     double GetAngularPosition();
     double GetLowAngularVelocity();
     double GetHighAngularVelocity();
     double GetCachedData(sensor sensor, sensorData dataType, axis axis);
 
-    bool IsRotationComplete();
-
-    double Step();
+    void Step();
 
   private:
     int _motorPin;
@@ -81,6 +84,7 @@ class BladeManager{
 
     sensors_event_t _lowAcceleration, _lowGyro, _lowTemp;
     float _highX, _highY, _highZ;
+
 };
 
 #endif

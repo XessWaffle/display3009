@@ -1,7 +1,7 @@
 #ifndef BLADE_FRAME_H
 #define BLADE_FRAME_H
 
-#define ARM_FRAME_UNITS 3
+#define ARM_FRAME_UNITS 360
 
 #include "ArmFrame.h"
 

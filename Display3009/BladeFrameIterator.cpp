@@ -60,22 +60,34 @@ void BladeFrameIterator::AddFrame(BladeFrame* frame){
 
 }
 
+BladeFrame *BladeFrameIterator::GetFrame(){
+  return this->_frameDisplay->frame;
+}
+
 void BladeFrameIterator::RemoveFrame(int id){
   BladeFrameNode *head = this->_frameSet;
   int queried = 0;
 
   if(head == NULL) return;
+
+  bool removed = false;
   
   while(queried < this->_frames){
     if(id == head->id){
-
+      BladeFrameNode *remove = head;
       head->prev->next = head->next;
       head->next->prev = head->prev;
       head->frame->Destroy();
-      free(head);
+      head = head->next;
+      free(remove);
       this->_frames--;
-      break;
+      removed = true;
     }
+
+    if(removed){
+      head->id--;
+    }
+
     queried++;
     head = head->next;
   }
@@ -86,10 +98,14 @@ void BladeFrameIterator::SetFrameRate(double rate){
   this->_frameWait = 1000/rate;
 }
 
-BladeFrame *BladeFrameIterator::Step(){
+bool BladeFrameIterator::Step(){
   long currentTime = millis();
 
+  bool frameChanged = false;
+
   if(currentTime - this->_lastFrameUpdate > this->_frameWait){
+
+    int prevId = this->_frameDisplay->id;
 
     if(this->_frameCounter >= this->_frames){
       this->_forward = !this->_forward;
@@ -101,9 +117,12 @@ BladeFrame *BladeFrameIterator::Step(){
     } else if(this->_type == animationType::REWIND){
       this->_frameDisplay = this->_forward ? this->_frameDisplay->next : this->_frameDisplay->prev;
     }
+
+    int currId = this->_frameDisplay->id;
+
+    frameChanged = prevId != currId;
     this->_frameCounter++;
     this->_lastFrameUpdate = currentTime;
   }
-  
-  return this->_frameDisplay->frame;
+  return frameChanged;
 } 

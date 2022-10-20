@@ -23,11 +23,12 @@ class BladeFrameIterator{
     void Destroy();
 
     void AddFrame(BladeFrame* frame);
+    BladeFrame *GetFrame();
     void RemoveFrame(int id);
 
     void SetFrameRate(double rate);
 
-    BladeFrame *Step();
+    bool Step();
 
   private:
 
