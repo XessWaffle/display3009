@@ -34,6 +34,8 @@ struct Blade{
 
   BladeFrame *currFrame = NULL;
   struct CRGB *primary = NULL, *follower = NULL;
+  bool triggered = false;
+  bool triggerSet = false;
 };
 
 extern void IRAM_ATTR isr_integrator();
@@ -63,6 +65,8 @@ class BladeManager{
     void SetTrigger(BladeFrame *frame, struct CRGB *primary, struct CRGB *follower);
     void SetTarget(int write);
     void SetDriftMultiplier(double multiplier);
+
+    bool IsTriggered();
 
     double GetAngularVelocity();
     double GetAngularPosition();

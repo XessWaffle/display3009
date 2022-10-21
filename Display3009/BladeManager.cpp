@@ -10,7 +10,7 @@ hw_timer_t *timer;
 
 void IRAM_ATTR isr_integrator(){
   portENTER_CRITICAL(&critMux);
-  _blade.theta += _blade.omega * 0.0015;
+  _blade.theta += _blade.omega * 0.001;
 
   if(_blade.theta > TWO_PI){
     _blade.theta = 0;
@@ -18,13 +18,30 @@ void IRAM_ATTR isr_integrator(){
 
   if(_blade.currFrame != NULL){
     double theta = _blade.theta;
-    ArmFrame *primaryFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
-    theta += PI;
-    if(theta >= TWO_PI) theta -= TWO_PI;
-    ArmFrame *followerFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
 
-    if(primaryFrame != NULL) primaryFrame->Trigger(_blade.primary);
-    if(followerFrame != NULL) followerFrame->Trigger(_blade.follower);
+    ArmFrame *primaryFrame = NULL, *followerFrame = NULL;
+
+    if(_blade.triggerSet){
+      primaryFrame = _blade.currFrame->GetClosestArmFrame(theta);
+      theta += PI;
+      if(theta >= TWO_PI) theta -= TWO_PI;
+      followerFrame = _blade.currFrame->GetClosestArmFrame(theta);
+      _blade.triggerSet = false;
+    } else {
+      primaryFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
+      theta += PI;
+      if(theta >= TWO_PI) theta -= TWO_PI;
+      followerFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
+    }
+
+    if(primaryFrame != NULL) {
+      primaryFrame->Trigger(_blade.primary);
+      _blade.triggered = true;
+    }
+    if(followerFrame != NULL) {
+      followerFrame->Trigger(_blade.follower);
+      _blade.triggered = true;
+    }
   }
   portEXIT_CRITICAL(&critMux);
 }
@@ -55,7 +72,7 @@ BladeManager::BladeManager(int motorPin){
 
   timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &isr_integrator, true);
-  timerAlarmWrite(timer, 1500, true);
+  timerAlarmWrite(timer, 1000, true);
   timerAlarmEnable(timer);
 
   _motor.attach(motorPin);
@@ -86,6 +103,7 @@ void BladeManager::SetTrigger(BladeFrame *frame, struct CRGB *primary, struct CR
   _blade.currFrame = frame;
   _blade.primary = primary;
   _blade.follower = follower;
+  _blade.triggerSet = true;
   portEXIT_CRITICAL(&critMux);
 }
 
@@ -95,6 +113,15 @@ void BladeManager::SetTarget(int write){
 
 void BladeManager::SetDriftMultiplier(double multiplier){
   this->_driftMultiplier = multiplier;
+}
+
+bool BladeManager::IsTriggered(){
+  bool triggered = false;
+  portENTER_CRITICAL(&critMux);
+  triggered = _blade.triggered;
+  _blade.triggered = false;
+  portEXIT_CRITICAL(&critMux);
+  return triggered;
 }
 
 double BladeManager::GetAngularVelocity(){

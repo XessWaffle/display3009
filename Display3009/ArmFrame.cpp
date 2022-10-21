@@ -1,5 +1,5 @@
 #include "ArmFrame.h"
-#include <Arduino.h>
+
 
 ArmFrame::ArmFrame(){
 
@@ -9,6 +9,10 @@ ArmFrame::ArmFrame(frameType type, int numLeds){
   this->_type = type;
   this->_numLeds = numLeds;
   this->_ledFrame = (CRGB*) malloc(numLeds * sizeof(CRGB));
+
+  for(int i = 0; i < numLeds; i++){
+    this->_ledFrame[i] = CRGB::Black;
+  }
 }
 
 void ArmFrame::SetLED(int led, CRGB color){
@@ -26,16 +30,5 @@ void ArmFrame::Trigger(struct CRGB *mod){
   for(int i = 0; i < this->_numLeds; i++){ 
     mod[i] = this->_ledFrame[i];   
   }
-
-  FastLED.show();
-
-  if(this->_type == frameType::FLASH){
-    for(int i = 0; i < this->_numLeds; i++){
-      mod[i] = CRGB::Black;
-    }
-
-    FastLED.show();
-  }
-
 
 }

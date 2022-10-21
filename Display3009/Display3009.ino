@@ -36,6 +36,7 @@ uint8_t createWriteInstruction(uint8_t inst){
 #define STATE createReadInstruction(0x05)
 #define TOGGLE createWriteInstruction(0x06)
 #define MULTIPLIER createWriteInstruction(0x07)
+#define FPS createWriteInstruction(0x08)
 
 // Define the array of leds
 struct CRGB primary[NUM_LEDS], follower[NUM_LEDS];
@@ -54,7 +55,7 @@ bool on = false, toggled = false;
 
 void connect(){
   if (!client.connect(host, port)) {
-    Serial.println("connection failed");
+
   } else {
     client.write((uint8_t) 0x11);
   }
@@ -68,7 +69,7 @@ void writeInstruction(const char* instStr, uint8_t inst){
 
 void onRefresh(){
   Serial.println("Refresh Requested");
-  client.write((uint8_t) 8);
+  client.write((uint8_t) 9);
   writeInstruction("throttle", THROTTLE);
   writeInstruction("start", START);
   writeInstruction("stop", STOP);
@@ -77,6 +78,7 @@ void onRefresh(){
   writeInstruction("state", STATE);
   writeInstruction("toggle", TOGGLE);
   writeInstruction("multiplier", MULTIPLIER);
+  writeInstruction("fps", FPS);
 }
 
 void onDisconnect(){
@@ -85,68 +87,32 @@ void onDisconnect(){
 
 
 void setup() {
-  Serial.begin(115200);
 
   FastLED.addLeds<WS2812B, PRIMARY_PIN, GRB>(primary, NUM_LEDS);  // GRB ordering is typical
   FastLED.addLeds<WS2812B, FOLLOWER_PIN, GRB>(follower, NUM_LEDS);
   
-  Serial.println();
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
       delay(500);
-      Serial.print(".");
   }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
 
   connect();
 
   bladeManager = BladeManager(MOTOR_PIN);
   bladeManager.SetTarget(1250);
 
-
-  ArmFrame* a1 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
-  ArmFrame* a2 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
-  ArmFrame* a3 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
-
-  Serial.println("Created Arm Frame");
+  frameIterator = BladeFrameIterator(BladeFrameIterator::REWIND);
 
   for(int i = 0; i < NUM_LEDS; i++){
-    if(i > 30){
-      a1->SetLED(i, CRGB::Red);
-      a2->SetLED(i, CRGB::White);
-      a3->SetLED(i, CRGB::Blue);
-    } else {
-      a1->SetLED(i, CRGB::Black);
-      a2->SetLED(i, CRGB::Black);
-      a3->SetLED(i, CRGB::Black);
-    }
+    ArmFrame* a1 = new ArmFrame(ArmFrame::HOLD, NUM_LEDS);
+    BladeFrame *f1 = new BladeFrame();
+    a1->SetLED(i, CRGB::Turquoise);
+    f1->AddArmFrame(a1, 0.0);
+    frameIterator.AddFrame(f1);
   }
 
-  Serial.println("Updated Colors for Arm Frame");
-  
-  BladeFrame *f1 = new BladeFrame();
-
-  f1->AddArmFrame(a1, 0.0);
-  f1->AddArmFrame(a2, TWO_PI/3.0);
-  f1->AddArmFrame(a3, 2 * TWO_PI/3.0);
-
-  Serial.println("Created and copied Frames");
-
-  frameIterator = BladeFrameIterator(BladeFrameIterator::LOOP);
-  frameIterator.AddFrame(f1);
-
   bladeManager.SetTrigger(frameIterator.GetFrame(), primary, follower);
-
-  Serial.println("Ready");
 }
 
 void loop() {
@@ -183,8 +149,6 @@ void loop() {
         throttle = BLADE_STOP_PWM;
 
       bladeManager.SetTarget(throttle);
-      Serial.print("Recieved Throttle Value: ");
-      Serial.println(throttle);
     } else if(byte == STATE){
       char buff[15];
       sprintf(buff, "%d\r", bladeManager.GetState());
@@ -195,13 +159,18 @@ void loop() {
       int multiplier;
       client.readBytes((char*) &multiplier, sizeof(int));
       bladeManager.SetDriftMultiplier((double) multiplier * MULTIPLIER_DIVISIONS);
+    } else if(byte == FPS){
+      int fps;
+      client.readBytes((char*) &fps, sizeof(int));
+      if(fps <= 0)
+        fps = 30;
+      frameIterator.SetFrameRate(fps);
     }
 
   }
 
   bladeManager.Step();
-  if(frameIterator.Step()){
-    bladeManager.SetTrigger(frameIterator.GetFrame(), primary, follower);
-  }
+  if(frameIterator.Step()) bladeManager.SetTrigger(frameIterator.GetFrame(), primary, follower);
+  if(bladeManager.IsTriggered()) FastLED.show();
 
 }

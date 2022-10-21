@@ -1,5 +1,4 @@
 #include "BladeFrame.h"
-#include <Arduino.h>
 
 BladeFrame::BladeFrame(){
   for(int i = 0; i < ARM_FRAME_UNITS; i++){
@@ -75,6 +74,34 @@ ArmFrame *BladeFrame::GetArmFrame(double theta, double noise){
     head = head->next;
   }
 
+  return NULL;
+}
+
+ArmFrame *BladeFrame::GetClosestArmFrame(double theta){
+  int origIndex = (int)(theta/TWO_PI * ARM_FRAME_UNITS), index = origIndex;
+
+  while(this->_set[index] == NULL) index--;
+
+  ArmFrameNode *head = this->_set[index];
+  
+  if(origIndex == index){
+    while(head != NULL){
+
+      if(theta >= head->theta){
+
+        if(head->next != NULL && theta >= head->next->theta){
+          continue;
+        } else {
+          return head->frame;
+        }
+      }
+
+      head = head->next;
+    }
+  } else {
+    while(head->next != NULL) head = head->next;
+    return head->frame;
+  }
   return NULL;
 }
 
