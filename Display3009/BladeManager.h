@@ -17,25 +17,34 @@
 #define MID_RANGE_G 200
 #define HIGH_RANGE_G 400
 
+#define SENSOR_QUERY_TIME 300
+
 #define BLADE_STOP_PWM 1000
+#define BLADE_START_PWM 1250
+#define BLADE_SATURATION_PWM 1270
 #define BLADE_MAX_PWM 1450
 #define MPU_RADIUS 0.084
 #define HPM_RADIUS 0.109
 
 #define BLADE_UPDATE_DELAY 50
 
-#define BLADE_START_OMEGA 10
-#define BLADE_SATURATION_OMEGA 40
+
+
+#define BLADE_READINGS 20
+
+
+extern void stream(const char* info);
 
 struct Blade{
   double omega, theta;
   double omegaLow, omegaHigh;
-  unsigned long lastReadTime;
+  double driftMultiplier = 3.126;
 
   BladeFrame *currFrame = NULL;
   struct CRGB *primary = NULL, *follower = NULL;
   bool triggered = false;
-  bool triggerSet = false;
+
+  int readings = 0;
 };
 
 extern void IRAM_ATTR isr_integrator();
@@ -48,11 +57,6 @@ enum SpinState{STARTING, SPINNING, STOPPING, STOPPED};
 
 class BladeManager{
   public:
-    
-    typedef enum {DATA_LOW, DATA_HIGH} sensor;
-    typedef enum {ACCELERATION, TEMPERATURE, GYRO} sensorData;
-    typedef enum {X, Y, Z} axis;
-    
     BladeManager();
     BladeManager(int motorPin);
 
@@ -72,23 +76,24 @@ class BladeManager{
     double GetAngularPosition();
     double GetLowAngularVelocity();
     double GetHighAngularVelocity();
-    double GetCachedData(sensor sensor, sensorData dataType, axis axis);
 
-    void Step();
+    bool Step();
+
+    void DisableTimer();
+    void EnableTimer();
 
   private:
+
+    bool _timerDisabled, _velocityUpdateRequest;
+
     int _motorPin;
     int _motorWriteValue;
     int _state = SpinState::STOPPED;
     int _numLeds;
 
-    long _lastStepped;
+    long _lastStepped, _lastRead;
     
-    double _desiredWrite, _driftMultiplier = 1.0;
-
-    sensors_event_t _lowAcceleration, _lowGyro, _lowTemp;
-    float _highX, _highY, _highZ;
-
+    double _desiredWrite;
 };
 
 #endif

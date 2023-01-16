@@ -3,13 +3,13 @@
 
 #include <FastLED.h>
 
+extern void stream(const char* info);
+
 class ArmFrame{
   public:
 
-    typedef enum {FLASH, HOLD} frameType;
-
     ArmFrame();
-    ArmFrame(frameType type, int numLeds);
+    ArmFrame(int numLeds);
 
     void SetLED(int led, CRGB color);
     void Destroy();
@@ -19,7 +19,6 @@ class ArmFrame{
   private:
     struct CRGB *_ledFrame;
     int _numLeds;
-    frameType _type;
 };
 
 

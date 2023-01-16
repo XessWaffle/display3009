@@ -1,130 +1,94 @@
 #include "BladeFrame.h"
 
 BladeFrame::BladeFrame(){
-  for(int i = 0; i < ARM_FRAME_UNITS; i++){
-    this->_set[i] = NULL;
-  }
+  this->_root = NULL;
+  this->_primary = NULL;
+  this->_follower = NULL;
+  this->_frames = 0;
 }
 
 void BladeFrame::Destroy(){
-  for(int i = 0; i < ARM_FRAME_UNITS; i++){
-    ArmFrameNode *head = this->_set[i], *remove = head;
+  ArmFrameNode *head = this->_root->next;
 
-    while(head->next != NULL){
-      head = head->next;
-      remove->frame->Destroy();
-      free(remove);
-      remove = head;      
-    }
+  while(head->next != this->_root){
+    ArmFrameNode* remove = head;
+    head = head->next;
+    remove->frame->Destroy();
+    free(remove);
   }
+
+  this->_root->frame->Destroy();
+  free(this->_root);
+
 }
+
 
 void BladeFrame::AddArmFrame(ArmFrame* frame, double theta){
-  int index = (int)(theta/TWO_PI * ARM_FRAME_UNITS);
-  ArmFrameNode *head = this->_set[index], *edit = (ArmFrameNode*) malloc(sizeof(ArmFrameNode));
-  edit->frame = frame;
-  edit->theta = theta;
-  edit->next = NULL;
-  edit->prev = NULL;
+  
+  while(theta < 0) theta += TWO_PI;
+  while(theta >= TWO_PI) theta -= TWO_PI;
+
+  struct ArmFrameNode* next = (struct ArmFrameNode *) malloc(sizeof(struct ArmFrameNode)), *head = this->_root;
+
+  next->theta = theta;
+  next->frame = frame;
 
   if(head == NULL){
-    this->_set[index] = edit;
+    this->_root = next;
+    next->next = next;
+    next->prev = next;
   } else {
-
-    bool inserted = false;
-
-    while(head->next != NULL){
-      if(head->theta > edit->theta){
-        ArmFrameNode *prev = head->prev;
-        prev->next = edit;
-        edit->prev = prev;
-        edit->next = head;
-        head->prev = edit;
-        inserted = true;
+    int count = 0;
+    while(true){
+      
+      if(head->theta > theta || count == this->_frames){
+        struct ArmFrameNode *prev = head->prev;
+        if(prev != NULL)  prev->next = next;
+        next->prev = prev;
+        next->next = head;
+        head->prev = next;
+        break;
       }
 
       head = head->next;
-    }
+      count++;
 
-    if(!inserted){
-      head->next = edit;
-      edit->prev = head;
     }
-
   }
+
+  this->_frames++;
 
 }
 
-ArmFrame *BladeFrame::GetArmFrame(double theta, double noise){
-  int index = (int)(theta/TWO_PI * ARM_FRAME_UNITS);
+void BladeFrame::UpdateArmFrame(double theta){
 
-  ArmFrameNode *head = this->_set[index];
+  double followerTheta = theta + PI;
 
-  while(head != NULL){
+  while(theta < 0) theta += TWO_PI;
+  while(theta >= TWO_PI) theta -= TWO_PI;
+  while(followerTheta >= TWO_PI) followerTheta -= TWO_PI;
 
-    if(theta >= head->theta){
+  if(this->_primary == NULL) this->_primary = this->_root;
+  if(this->_follower == NULL) this->_follower = this->_root;
 
-      if(head->next != NULL && theta >= head->next->theta){
-        continue;
-      } else {
-        return head->frame;
-      }
-    }
+  int count = 0;
 
-    head = head->next;
+  while(this->_primary->theta > theta && count < this->_frames) {
+    this->_primary = this->_primary->next;
+    count++;
+  }
+  count = 0;
+  while(this->_follower->theta > followerTheta && count < this->_frames) {
+    this->_follower = this->_follower->next; 
+    count++;
   }
 
-  return NULL;
+}
+ 
+ArmFrame *BladeFrame::GetPrimaryFrame(){
+  return this->_primary->frame;
 }
 
-ArmFrame *BladeFrame::GetClosestArmFrame(double theta){
-  int origIndex = (int)(theta/TWO_PI * ARM_FRAME_UNITS), index = origIndex;
-
-  while(this->_set[index] == NULL) index--;
-
-  ArmFrameNode *head = this->_set[index];
-  
-  if(origIndex == index){
-    while(head != NULL){
-
-      if(theta >= head->theta){
-
-        if(head->next != NULL && theta >= head->next->theta){
-          continue;
-        } else {
-          return head->frame;
-        }
-      }
-
-      head = head->next;
-    }
-  } else {
-    while(head->next != NULL) head = head->next;
-    return head->frame;
-  }
-  return NULL;
-}
-
-void BladeFrame::RemoveArmFrame(double theta, double noise){
-  int index = (int)(theta/TWO_PI * ARM_FRAME_UNITS);
-
-  ArmFrameNode *head = this->_set[index], *remove = NULL;
-
-  while(head != NULL){
-
-    if(head->theta > theta){
-      if(head->prev->theta + noise >= theta){
-        remove = head->prev;
-        remove->frame->Destroy();
-        remove->prev->next = head;
-        head->prev = remove->prev;
-        free(remove);
-      } 
-      break;
-    }
-
-    head = head->next;
-  }
-
-
+ArmFrame *BladeFrame::GetFollowerFrame(){
+  return this->_follower->frame;
 }

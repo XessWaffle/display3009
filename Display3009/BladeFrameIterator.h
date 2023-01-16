@@ -5,6 +5,8 @@
 
 #include "BladeFrame.h"
 
+extern void stream(const char* info);
+
 struct BladeFrameNode{
   int id;
   
@@ -24,7 +26,6 @@ class BladeFrameIterator{
 
     void AddFrame(BladeFrame* frame);
     BladeFrame *GetFrame();
-    void RemoveFrame(int id);
 
     void SetFrameRate(double rate);
 

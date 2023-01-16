@@ -1,9 +1,10 @@
 #ifndef BLADE_FRAME_H
 #define BLADE_FRAME_H
 
-#define ARM_FRAME_UNITS 60
-
 #include "ArmFrame.h"
+
+
+extern void stream(const char* info);
 
 struct ArmFrameNode{
   double theta = 0.0;
@@ -21,13 +22,14 @@ class BladeFrame{
     void Destroy();
 
     void AddArmFrame(ArmFrame* frame, double theta);
-    ArmFrame *GetArmFrame(double theta, double noise);
-    ArmFrame *GetClosestArmFrame(double theta);
-    void RemoveArmFrame(double theta, double noise);
+    void UpdateArmFrame(double theta);
+    ArmFrame *GetPrimaryFrame();
+    ArmFrame *GetFollowerFrame();
+  
 
   private:
-    ArmFrameNode *_set[ARM_FRAME_UNITS];
-
+    ArmFrameNode *_root, *_primary = NULL, *_follower = NULL;
+    int _frames;
 };
 
 

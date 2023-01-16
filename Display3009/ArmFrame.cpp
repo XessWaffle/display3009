@@ -5,8 +5,7 @@ ArmFrame::ArmFrame(){
 
 }
 
-ArmFrame::ArmFrame(frameType type, int numLeds){
-  this->_type = type;
+ArmFrame::ArmFrame(int numLeds){
   this->_numLeds = numLeds;
   this->_ledFrame = (CRGB*) malloc(numLeds * sizeof(CRGB));
 

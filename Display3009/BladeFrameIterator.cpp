@@ -33,27 +33,27 @@ void BladeFrameIterator::Destroy(){
 
 
 void BladeFrameIterator::AddFrame(BladeFrame* frame){
-  BladeFrameNode *next = (BladeFrameNode*) malloc(sizeof(BladeFrameNode)), *prev = NULL;
+  BladeFrameNode *frameNode = (BladeFrameNode*) malloc(sizeof(BladeFrameNode)), *prev = NULL;
 
-  next->id = this->_frames;
-  next->frame = frame;
-  next->next = NULL;
-  next->prev = NULL;
+  frameNode->id = this->_frames;
+  frameNode->frame = frame;
+  frameNode->next = NULL;
+  frameNode->prev = NULL;
 
   int insert = 0;
 
   if(this->_frameSet == NULL){
-    this->_frameSet = next;
-    this->_frameDisplay = next;
+    this->_frameSet = frameNode;
+    this->_frameDisplay = frameNode;
 
-    next->prev = next;
-    next->next = next;
+    frameNode->prev = frameNode;
+    frameNode->next = frameNode;
   } else {
     prev = this->_frameSet->prev;
-    prev->next = next;
-    next->prev = prev;
-    next->next = this->_frameSet;
-    this->_frameSet->prev = next;
+    prev->next = frameNode;
+    frameNode->prev = prev;
+    frameNode->next = this->_frameSet;
+    this->_frameSet->prev = frameNode;
   }
 
   this->_frames++;
@@ -64,34 +64,6 @@ BladeFrame *BladeFrameIterator::GetFrame(){
   return this->_frameDisplay->frame;
 }
 
-void BladeFrameIterator::RemoveFrame(int id){
-  BladeFrameNode *head = this->_frameSet;
-  int queried = 0;
-
-  if(head == NULL) return;
-
-  bool removed = false;
-  
-  while(queried < this->_frames){
-    if(id == head->id){
-      BladeFrameNode *remove = head;
-      head->prev->next = head->next;
-      head->next->prev = head->prev;
-      head->frame->Destroy();
-      head = head->next;
-      free(remove);
-      this->_frames--;
-      removed = true;
-    }
-
-    if(removed){
-      head->id--;
-    }
-
-    queried++;
-    head = head->next;
-  }
-}
 
 void BladeFrameIterator::SetFrameRate(double rate){
   this->_frameRate = rate;

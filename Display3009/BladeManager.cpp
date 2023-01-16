@@ -10,29 +10,18 @@ hw_timer_t *timer;
 
 void IRAM_ATTR isr_integrator(){
   portENTER_CRITICAL(&critMux);
-  _blade.theta += _blade.omega * 0.001;
+  _blade.theta += _blade.omega * 0.00025 * _blade.driftMultiplier;
 
   if(_blade.theta > TWO_PI){
-    _blade.theta = 0;
+    _blade.theta -= TWO_PI;
   }
 
   if(_blade.currFrame != NULL){
-    double theta = _blade.theta;
-
     ArmFrame *primaryFrame = NULL, *followerFrame = NULL;
+    _blade.currFrame->UpdateArmFrame(_blade.theta);
 
-    if(_blade.triggerSet){
-      primaryFrame = _blade.currFrame->GetClosestArmFrame(theta);
-      theta += PI;
-      if(theta >= TWO_PI) theta -= TWO_PI;
-      followerFrame = _blade.currFrame->GetClosestArmFrame(theta);
-      _blade.triggerSet = false;
-    } else {
-      primaryFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
-      theta += PI;
-      if(theta >= TWO_PI) theta -= TWO_PI;
-      followerFrame = _blade.currFrame->GetArmFrame(theta, ANGULAR_FRAME_NOISE);
-    }
+    primaryFrame = _blade.currFrame->GetPrimaryFrame();
+    followerFrame = _blade.currFrame->GetFollowerFrame();
 
     if(primaryFrame != NULL) {
       primaryFrame->Trigger(_blade.primary);
@@ -57,6 +46,7 @@ BladeManager::BladeManager(int motorPin){
   this->_motorWriteValue = BLADE_STOP_PWM;
 
   this->_lastStepped = millis();
+  this->_lastRead = millis();
   this->_desiredWrite = BLADE_STOP_PWM;
 
   if(_mpu.begin()){
@@ -69,17 +59,16 @@ BladeManager::BladeManager(int motorPin){
   _xl.setODR(LIS331::DR_1000HZ);
   _xl.setFullScale(LIS331::LOW_RANGE);
   
-
-  timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(timer, &isr_integrator, true);
-  timerAlarmWrite(timer, 1000, true);
-  timerAlarmEnable(timer);
-
   _motor.attach(motorPin);
   _motor.writeMicroseconds(BLADE_MAX_PWM);
   delay(100);
   _motor.writeMicroseconds(BLADE_STOP_PWM);
-  
+
+  timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer, &isr_integrator, true);
+  timerAlarmWrite(timer, 250, true);
+  timerAlarmEnable(timer);
+  this->_timerDisabled = false;
 }
 
 void BladeManager::SetState(SpinState state){
@@ -91,7 +80,8 @@ int BladeManager::GetState(){
 }
 
 void BladeManager::StartBlade(){
-  this->_state = SpinState::STARTING;
+  if(!this->_timerDisabled)
+    this->_state = SpinState::STARTING;
 }
 void BladeManager::StopBlade(){
   this->_state = SpinState::STOPPING;
@@ -103,7 +93,6 @@ void BladeManager::SetTrigger(BladeFrame *frame, struct CRGB *primary, struct CR
   _blade.currFrame = frame;
   _blade.primary = primary;
   _blade.follower = follower;
-  _blade.triggerSet = true;
   portEXIT_CRITICAL(&critMux);
 }
 
@@ -112,7 +101,9 @@ void BladeManager::SetTarget(int write){
 }
 
 void BladeManager::SetDriftMultiplier(double multiplier){
-  this->_driftMultiplier = multiplier;
+  portENTER_CRITICAL(&critMux);
+  _blade.driftMultiplier = multiplier;
+  portEXIT_CRITICAL(&critMux);
 }
 
 bool BladeManager::IsTriggered(){
@@ -152,85 +143,55 @@ double BladeManager::GetAngularPosition(){
   return theta;
 }
 
-
-double BladeManager::GetCachedData(sensor sensor, sensorData dataType, axis axis){
-  if(sensor == DATA_LOW){
-    if(dataType == TEMPERATURE){
-      return this->_lowTemp.temperature;
-    } else if(dataType == GYRO){
-      if(axis == X){
-        return this->_lowGyro.gyro.x;
-      } else if(axis == Y){
-        return this->_lowGyro.gyro.y;
-      } else if(axis == Z){
-        return this->_lowGyro.gyro.z;
-      }
-    } else if(dataType == ACCELERATION){
-      if(axis == X){
-        return this->_lowAcceleration.acceleration.x;
-      } else if(axis == Y){
-        return this->_lowAcceleration.acceleration.y;
-      } else if(axis == Z){
-        return this->_lowAcceleration.acceleration.z;
-      }
-    }
-  } else {
-    if(dataType == ACCELERATION){
-      if(axis == X){
-        return this->_highX;
-      } else if(axis == Y){
-        return this->_highY;
-      } else if(axis == Z){
-        return this->_highZ;
-      }
-    }
-  }
-
-  return 0.0;
-}
-
-void BladeManager::Step(){
+bool BladeManager::Step(){
 
   long currentStep = millis();
+  bool lowSaturation = this->_desiredWrite > BLADE_SATURATION_PWM;
 
   sensors_event_t a, g, temp;
-  _mpu.getEvent(&a, &g, &temp);
-
   int16_t x, y, z;
-  _xl.readAxes(x, y, z);
-  float xlx = _xl.convertToG(LOW_RANGE_G, x), xly = _xl.convertToG(LOW_RANGE_G, y), xlz = _xl.convertToG(LOW_RANGE_G, z);
+  float xlx, xly, xlz;
+  double omega;
+  bool triggered = false, sensorQuery = currentStep - this->_lastRead > SENSOR_QUERY_TIME;
 
-  double omegaLow = sqrt(abs(a.acceleration.y)/MPU_RADIUS);
-  double omegaHigh = sqrt(abs(xly)/HPM_RADIUS) * _driftMultiplier;
-  double omega = omegaLow > BLADE_SATURATION_OMEGA ? omegaHigh : omegaLow;
+  if(sensorQuery && this->_velocityUpdateRequest)
+    if(!lowSaturation){
+      _mpu.getEvent(&a, &g, &temp);
+      omega = sqrt(abs(a.acceleration.y)/MPU_RADIUS);
+      this->_lastRead = currentStep;
+    } else {
+      _xl.readAxes(x, y, z);
+      xly = _xl.convertToG(LOW_RANGE_G, y);
+      omega = sqrt(abs(xly)/HPM_RADIUS);
+      this->_lastRead = currentStep;
+    }
 
   portENTER_CRITICAL(&critMux);
-  _blade.omega = omega;
-  _blade.omegaLow = omegaLow;
-  _blade.omegaHigh = omegaHigh;
+  if(_blade.readings == BLADE_READINGS){
+    _blade.omega /= BLADE_READINGS;
+    this->_velocityUpdateRequest = false;
+    _blade.readings = 0;
+  }
+  if(sensorQuery && this->_velocityUpdateRequest){
+    _blade.omega += omega;
+    _blade.readings++;
+  }
+  triggered = _blade.triggered;
   portEXIT_CRITICAL(&critMux);
 
-  this->_lowAcceleration = a;
-  this->_lowGyro = g;
-  this->_lowTemp = temp;
-
-  this->_highX = xlx;
-  this->_highY = xly;
-  this->_highZ = xlz;
-
-  //Serial.printf("Low (%.2f): (%.2f, %.2f, %.2f) | High (%.2f) : (%d, %d, %d)\n", omegaLow, a.acceleration.x, a.acceleration.y, a.acceleration.z, omegaHigh, x, y, z);
-
   if(this->_state == SpinState::STARTING){
-    if(omega > BLADE_START_OMEGA){
+    if(this->_motorWriteValue >= BLADE_START_PWM){
       this->_state = SpinState::SPINNING;
+      this->_velocityUpdateRequest = true;
     } else if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY){
       this->_motorWriteValue += 1;
-
       this->_lastStepped = currentStep;
     }
   } else if(this->_state == SpinState::SPINNING){
 
-    if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY){
+    bool desiredValue = this->_desiredWrite == this->_motorWriteValue;
+
+    if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY && !desiredValue){
       this->_motorWriteValue += this->_motorWriteValue < this->_desiredWrite ? 1 : -1;
 
       if(this->_motorWriteValue >= BLADE_MAX_PWM)
@@ -243,8 +204,12 @@ void BladeManager::Step(){
       this->_lastStepped = currentStep;
     }
 
+    if(!desiredValue && this->_desiredWrite == this->_motorWriteValue){
+      this->_velocityUpdateRequest = true;
+    }
+
   } else if(this->_state == SpinState::STOPPING){
-    if(omega < BLADE_START_OMEGA){
+    if(this->_motorWriteValue < BLADE_START_PWM){
       this->_state = SpinState::STOPPED;
     } else if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY){
       this->_motorWriteValue += -1;
@@ -254,4 +219,16 @@ void BladeManager::Step(){
     this->_motorWriteValue = BLADE_STOP_PWM;
   }
   _motor.writeMicroseconds(this->_motorWriteValue);
+  return triggered;
+}
+
+void BladeManager::DisableTimer(){
+  if(this->_state == SpinState::STOPPED){
+    timerAlarmDisable(timer);
+    this->_timerDisabled = true;
+  }
+}
+void BladeManager::EnableTimer(){
+  timerAlarmEnable(timer);
+  this->_timerDisabled = false;
 }
