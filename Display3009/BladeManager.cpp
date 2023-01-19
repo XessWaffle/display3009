@@ -10,7 +10,7 @@ hw_timer_t *timer;
 
 void IRAM_ATTR isr_integrator(){
   portENTER_CRITICAL(&critMux);
-  _blade.theta += _blade.omega * 0.00025 * _blade.driftMultiplier;
+  _blade.theta += ROTATION_RATE * 0.00025;
 
   if(_blade.theta > TWO_PI){
     _blade.theta -= TWO_PI;
@@ -80,9 +80,11 @@ int BladeManager::GetState(){
 }
 
 void BladeManager::StartBlade(){
+  UpdateGravity();
   if(!this->_timerDisabled)
     this->_state = SpinState::STARTING;
 }
+
 void BladeManager::StopBlade(){
   this->_state = SpinState::STOPPING;
 }
@@ -122,19 +124,6 @@ double BladeManager::GetAngularVelocity(){
   return omega;
 }
 
-double BladeManager::GetLowAngularVelocity(){
-  portENTER_CRITICAL(&critMux);
-  double omega = _blade.omegaLow;
-  portEXIT_CRITICAL(&critMux);
-  return omega;
-}
-
-double BladeManager::GetHighAngularVelocity(){
-  portENTER_CRITICAL(&critMux);
-  double omega = _blade.omegaHigh;
-  portEXIT_CRITICAL(&critMux);
-  return omega;
-}
 
 double BladeManager::GetAngularPosition(){
   portENTER_CRITICAL(&critMux);
@@ -146,40 +135,26 @@ double BladeManager::GetAngularPosition(){
 bool BladeManager::Step(){
 
   long currentStep = millis();
-  bool lowSaturation = this->_desiredWrite > BLADE_SATURATION_PWM;
 
-  sensors_event_t a, g, temp;
   int16_t x, y, z;
   float xlx, xly, xlz;
   double omega;
   bool triggered = false, sensorQuery = currentStep - this->_lastRead > SENSOR_QUERY_TIME;
 
-  if(sensorQuery && this->_velocityUpdateRequest)
-    if(!lowSaturation){
-      _mpu.getEvent(&a, &g, &temp);
-      omega = sqrt(abs(a.acceleration.y)/MPU_RADIUS);
-      this->_lastRead = currentStep;
-    } else {
-      _xl.readAxes(x, y, z);
-      xly = _xl.convertToG(LOW_RANGE_G, y);
-      omega = sqrt(abs(xly)/HPM_RADIUS);
-      this->_lastRead = currentStep;
-    }
+  if(sensorQuery){
+    _xl.readAxes(x, y, z);
+    xly = _xl.convertToG(LOW_RANGE_G, y) * _gravity;
+    omega = sqrt(abs(xly)/HPM_RADIUS);
+    this->_lastRead = currentStep;
+  }
 
   portENTER_CRITICAL(&critMux);
-  if(_blade.readings == BLADE_READINGS){
-    _blade.omega /= BLADE_READINGS;
-    this->_velocityUpdateRequest = false;
-    _blade.readings = 0;
-  }
-  if(sensorQuery && this->_velocityUpdateRequest){
-    _blade.omega += omega;
-    _blade.readings++;
-  }
+  _blade.omega = omega;
   triggered = _blade.triggered;
   portEXIT_CRITICAL(&critMux);
 
   if(this->_state == SpinState::STARTING){
+
     if(this->_motorWriteValue >= BLADE_START_PWM){
       this->_state = SpinState::SPINNING;
       this->_velocityUpdateRequest = true;
@@ -187,6 +162,7 @@ bool BladeManager::Step(){
       this->_motorWriteValue += 1;
       this->_lastStepped = currentStep;
     }
+
   } else if(this->_state == SpinState::SPINNING){
 
     bool desiredValue = this->_desiredWrite == this->_motorWriteValue;
@@ -199,24 +175,24 @@ bool BladeManager::Step(){
       
       if(this->_motorWriteValue <= BLADE_STOP_PWM)
         this->_motorWriteValue = BLADE_STOP_PWM;
-  
 
       this->_lastStepped = currentStep;
     }
 
-    if(!desiredValue && this->_desiredWrite == this->_motorWriteValue){
-      this->_velocityUpdateRequest = true;
-    }
-
   } else if(this->_state == SpinState::STOPPING){
+
     if(this->_motorWriteValue < BLADE_START_PWM){
       this->_state = SpinState::STOPPED;
     } else if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY){
       this->_motorWriteValue += -1;
       this->_lastStepped = currentStep;
     }
+
   } else if(this->_state == SpinState::STOPPED){
+
     this->_motorWriteValue = BLADE_STOP_PWM;
+    UpdateGravity();
+
   }
   _motor.writeMicroseconds(this->_motorWriteValue);
   return triggered;
@@ -231,4 +207,16 @@ void BladeManager::DisableTimer(){
 void BladeManager::EnableTimer(){
   timerAlarmEnable(timer);
   this->_timerDisabled = false;
+}
+
+void BladeManager::UpdateGravity(){
+  if(this->_state == SpinState::STOPPED){
+    for(int i = 0; i < AVG_READINGS; i++) {
+      sensors_event_t a, g, temp;
+      _mpu.getEvent(a, g, temp);
+      float x = a.acceleration.x, y = a.acceleration.y, z = a.acceleration.z;
+      _gravity += sqrt(x * x + y * y + z * z);
+    }
+    _gravity /= AVG_READINGS;
+  }
 }

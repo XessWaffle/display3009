@@ -8,37 +8,30 @@
 #include <Wire.h>
 #include "BladeFrame.h"
 
-#define ANGULAR_FRAME_NOISE 0.005
-
-#define MULTIPLIER_LOW 1.0
-#define MULTIPLIER_DIVISIONS 0.001
 
 #define LOW_RANGE_G 100
 #define MID_RANGE_G 200
 #define HIGH_RANGE_G 400
 
-#define SENSOR_QUERY_TIME 300
+#define SENSOR_QUERY_TIME 50
 
 #define BLADE_STOP_PWM 1000
 #define BLADE_START_PWM 1250
-#define BLADE_SATURATION_PWM 1270
 #define BLADE_MAX_PWM 1450
 #define MPU_RADIUS 0.084
 #define HPM_RADIUS 0.109
 
 #define BLADE_UPDATE_DELAY 50
 
+#define ROTATION_RATE 30
 
-
-#define BLADE_READINGS 20
+#define AVG_READINGS 20
 
 
 extern void stream(const char* info);
 
 struct Blade{
   double omega, theta;
-  double omegaLow, omegaHigh;
-  double driftMultiplier = 3.126;
 
   BladeFrame *currFrame = NULL;
   struct CRGB *primary = NULL, *follower = NULL;
@@ -74,13 +67,14 @@ class BladeManager{
 
     double GetAngularVelocity();
     double GetAngularPosition();
-    double GetLowAngularVelocity();
-    double GetHighAngularVelocity();
 
     bool Step();
 
     void DisableTimer();
     void EnableTimer();
+
+  private:
+    void UpdateGravity();
 
   private:
 
@@ -94,6 +88,8 @@ class BladeManager{
     long _lastStepped, _lastRead;
     
     double _desiredWrite;
+
+    double _gravity = 9.80665;
 };
 
 #endif
