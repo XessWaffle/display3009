@@ -60,28 +60,38 @@ void BladeFrame::AddArmFrame(ArmFrame* frame, double theta){
 
 }
 
-void BladeFrame::UpdateArmFrame(double theta){
+uint8_t BladeFrame::UpdateArmFrame(double theta){
 
   double followerTheta = theta + PI;
 
   while(theta < 0) theta += TWO_PI;
   while(theta >= TWO_PI) theta -= TWO_PI;
   while(followerTheta >= TWO_PI) followerTheta -= TWO_PI;
+  
+  ArmFrameNode *tempPrimary = this->_primary, *tempFollower = this->_follower;
 
   if(this->_primary == NULL) this->_primary = this->_root;
   if(this->_follower == NULL) this->_follower = this->_root;
 
   int count = 0;
 
-  while(this->_primary->theta > theta && count < this->_frames) {
+  while(count < this->_frames) {
+    if(this->_primary->theta <= theta && 
+      (this->_primary->next->theta < this->_primary->theta || this->_primary->next->theta > theta))
+        break;
     this->_primary = this->_primary->next;
     count++;
   }
   count = 0;
-  while(this->_follower->theta > followerTheta && count < this->_frames) {
+  while(count < this->_frames) {
+    if(this->_follower->theta <= followerTheta && 
+      (this->_follower->next->theta < this->_follower->theta || this->_follower->next->theta > followerTheta))
+        break;
     this->_follower = this->_follower->next; 
     count++;
   }
+
+  return (uint8_t) ((this->_primary != tempPrimary) << 1) | (this->_follower != tempFollower);
 
 }
  

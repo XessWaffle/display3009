@@ -3,8 +3,6 @@
 
 #include <FastLED.h>
 
-extern void stream(const char* info);
-
 class ArmFrame{
   public:
 

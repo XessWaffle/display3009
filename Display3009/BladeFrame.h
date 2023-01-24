@@ -4,8 +4,6 @@
 #include "ArmFrame.h"
 
 
-extern void stream(const char* info);
-
 struct ArmFrameNode{
   double theta = 0.0;
   ArmFrame *frame = NULL;
@@ -22,7 +20,7 @@ class BladeFrame{
     void Destroy();
 
     void AddArmFrame(ArmFrame* frame, double theta);
-    void UpdateArmFrame(double theta);
+    uint8_t UpdateArmFrame(double theta);
     ArmFrame *GetPrimaryFrame();
     ArmFrame *GetFollowerFrame();
   
