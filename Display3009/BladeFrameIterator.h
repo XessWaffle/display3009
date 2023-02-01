@@ -31,7 +31,7 @@ class BladeFrameIterator{
 
   private:
 
-    BladeFrameNode *_frameSet, *_frameDisplay;
+    BladeFrameNode *_frameSet, *_frameDisplay, *_frameLast;
     int _frames, _frameCounter;
     long _lastFrameUpdate, _frameWait = 1000/DEFAULT_FRAME_RATE;
     double _frameRate = DEFAULT_FRAME_RATE;

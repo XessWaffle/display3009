@@ -3,51 +3,11 @@
 #include <WiFi.h>
 #include "BladeManager.h" 
 #include "BladeFrameIterator.h"
-
-// How many leds in your strip?
-
-#define NUM_LEDS 72
-#define NUM_STRIPS 2
-#define NUM_ANIMATIONS 6
-
-
-// For led chips like WS2812, which have a data line, ground, and power, you just
-// need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
-// ground, and power), like the LPD8806 define both DATA_PIN and CLOCK_PIN
-// Clock pin only needed for SPI based chipsets when not using hardware SPI
-#define DATA_PIN_FOLLOWER 33
-#define CLOCK_PIN_FOLLOWER 32
-#define DATA_PIN_PRIMARY 19
-#define CLOCK_PIN_PRIMARY 14
-#define MOTOR_PIN 13
-
-uint8_t createReadInstruction(uint8_t inst){
-  return (uint8_t) (inst | 0x1 << 7);
-}
-
-uint8_t createWriteInstruction(uint8_t inst){
-  return (uint8_t) (inst & ~(0x1 << 7));
-}
-
-uint8_t createStreamClient(uint8_t id) {
-  return (uint8_t) (id | 0x1 << 7);
-}
-
-#define XESSAMD "192.168.137.71"
-#define MESSAGE_PAUSE 0xFF
-#define REFRESH 0xFF
-#define DISCONNECT 0xFE
-#define THROTTLE createWriteInstruction(0x00)
-#define START createWriteInstruction(0x01)
-#define STOP createWriteInstruction(0x02)
-#define TEST createReadInstruction(0x03)
-#define STATE createReadInstruction(0x05)
-#define ANIMATION createWriteInstruction(0x06)
-#define FPS createWriteInstruction(0x07)
-#define MULTIPLIER createWriteInstruction(0x08)
+#include "Constants.h"
+#include "CommunicationHandler.h"
 
 // Define the array of leds
-struct CRGB primary[NUM_LEDS], follower[NUM_LEDS];
+struct CRGB primary[CRENDER::NUM_LEDS], follower[CRENDER::NUM_LEDS];
 
 struct Blade{
   double omega = 40, theta;
@@ -58,52 +18,19 @@ struct Blade{
 
 volatile Blade blade;
 BladeManager bladeManager;
-BladeFrameIterator frameIterator[NUM_ANIMATIONS];
+BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
-
-const char* ssid     = "3009 Xess";
-const char* password = "dingd0ngditch";
-const int port = 80;
-const char* host = XESSAMD;
-
-WiFiClient client;
 
 TaskHandle_t DAQ_TASK, DISP_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
 
-void connect(){
-  if (client.connect(host, port)) {
-    client.write((uint8_t) 0x01);
-  }
-}
-
-void writeInstruction(const char* instStr, uint8_t inst){
-  client.print(instStr);
-  client.write(MESSAGE_PAUSE);
-  client.write(inst);
-}
-
-void onRefresh(){
-  client.write((uint8_t) 8);
-  writeInstruction("throttle", THROTTLE);
-  writeInstruction("start", START);
-  writeInstruction("stop", STOP);
-  writeInstruction("test", TEST);
-  writeInstruction("state", STATE);
-  writeInstruction("anim", ANIMATION);
-  writeInstruction("fps", FPS);
-  writeInstruction("mult", MULTIPLIER);
-}
-
-void onDisconnect(){
-  client.stop();
-}
+CommunicationHandler comms;
 
 void prepAnimations(){
   frameIterator[0] = BladeFrameIterator();
   BladeFrame *zero = new BladeFrame();
-  ArmFrame *pre = new ArmFrame(NUM_LEDS), *black = new ArmFrame(NUM_LEDS);
-  for(int i = 50; i < NUM_LEDS; i++){
+  ArmFrame *pre = new ArmFrame(CRENDER::NUM_LEDS), *black = new ArmFrame(CRENDER::NUM_LEDS);
+  for(int i = 50; i < CRENDER::NUM_LEDS; i++){
     pre->SetLED(i, CRGB::Red);
   }
   zero->AddArmFrame(pre, 0.0);
@@ -113,8 +40,8 @@ void prepAnimations(){
   frameIterator[0].AddFrame(zero);
 
   frameIterator[1] = BladeFrameIterator();
-  ArmFrame *orange = new ArmFrame(NUM_LEDS), *red = new ArmFrame(NUM_LEDS);
-  for(int i = 0; i < NUM_LEDS; i++){
+  ArmFrame *orange = new ArmFrame(CRENDER::NUM_LEDS), *red = new ArmFrame(CRENDER::NUM_LEDS);
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++){
     if(i > 50){
       orange->SetLED(i, CRGB::Orange);
       red->SetLED(i, CRGB::Red);
@@ -131,8 +58,8 @@ void prepAnimations(){
   }
 
   frameIterator[2] = BladeFrameIterator();
-  ArmFrame *purple = new ArmFrame(NUM_LEDS);
-  for(int i = 0; i < NUM_LEDS; i+=3){
+  ArmFrame *purple = new ArmFrame(CRENDER::NUM_LEDS);
+  for(int i = 0; i < CRENDER::NUM_LEDS; i+=3){
     purple->SetLED(i, CRGB(255, 0, 255));
   }
 
@@ -146,8 +73,8 @@ void prepAnimations(){
   }
 
   frameIterator[3] = BladeFrameIterator(BladeFrameIterator::REWIND);
-  for(int i = 0; i < NUM_LEDS; i++){
-    ArmFrame* a1 = new ArmFrame(NUM_LEDS);
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++){
+    ArmFrame* a1 = new ArmFrame(CRENDER::NUM_LEDS);
     BladeFrame *f1 = new BladeFrame();
     a1->SetLED(i, CRGB::Turquoise);
     f1->AddArmFrame(a1, 0.0);
@@ -155,8 +82,8 @@ void prepAnimations(){
   }
 
   frameIterator[4] = BladeFrameIterator(BladeFrameIterator::REWIND);
-  ArmFrame *white = new ArmFrame(NUM_LEDS), *redFull = new ArmFrame(NUM_LEDS), *greenFull = new ArmFrame(NUM_LEDS), *blueFull = new ArmFrame(NUM_LEDS);
-  for(int i = 0; i < NUM_LEDS; i++){
+  ArmFrame *white = new ArmFrame(CRENDER::NUM_LEDS), *redFull = new ArmFrame(CRENDER::NUM_LEDS), *greenFull = new ArmFrame(CRENDER::NUM_LEDS), *blueFull = new ArmFrame(CRENDER::NUM_LEDS);
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++){
     redFull->SetLED(i, CRGB::Red);
     greenFull->SetLED(i, CRGB(0, 255, 0));
     blueFull->SetLED(i, CRGB::Blue);
@@ -180,8 +107,8 @@ void prepAnimations(){
   frameIterator[4].AddFrame(f1);
 
   frameIterator[5] = BladeFrameIterator();
-  ArmFrame *test = new ArmFrame(NUM_LEDS);
-  for(int i = 0; i <= NUM_LEDS; i++){
+  ArmFrame *test = new ArmFrame(CRENDER::NUM_LEDS);
+  for(int i = 0; i <= CRENDER::NUM_LEDS; i++){
     if(i % 5 == 0)
       test->SetLED(i, CRGB::Gold);
   }
@@ -200,19 +127,27 @@ void setup() {
 
   Serial.begin(115200);
 
-  FastLED.addLeds<SK9822, DATA_PIN_PRIMARY, CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, NUM_LEDS);  // BGR ordering is typical
-  FastLED.addLeds<SK9822, DATA_PIN_FOLLOWER, CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, NUM_LEDS);  // BGR ordering is typical
+  FastLED.addLeds<SK9822, COPS::DATA_PIN_PRIMARY, COPS::CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, CRENDER::NUM_LEDS);  // BGR ordering is typical
+  FastLED.addLeds<SK9822, COPS::DATA_PIN_FOLLOWER, COPS::CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, CRENDER::NUM_LEDS);  // BGR ordering is typical
   //FastLED.setMaxRefreshRate(0);
 
-  WiFi.begin(ssid, password);
+  WiFi.begin(CCOMMS::SSID, CCOMMS::PWD);
 
   while (WiFi.status() != WL_CONNECTED) {
       delay(500);
   }
 
-  connect();
+  comms = CommunicationHandler();
+  comms.SetHandler(CCOMMS::START, &START);
+  comms.SetHandler(CCOMMS::STOP, &STOP);
+  comms.SetHandler(CCOMMS::STATE, &STATE);
+  comms.SetHandler(CCOMMS::TEST, &TEST);
+  comms.SetHandler(CCOMMS::THROTTLE, &THROTTLE);
+  comms.SetHandler(CCOMMS::ANIMATION, &ANIMATION);
+  comms.SetHandler(CCOMMS::FPS, &FPS);
+  comms.SetHandler(CCOMMS::MULTIPLIER, &MULTIPLIER);
 
-  bladeManager = BladeManager(MOTOR_PIN);
+  bladeManager = BladeManager(COPS::MOTOR_PIN);
   bladeManager.SetTarget(1300);
 
   prepAnimations();
@@ -228,7 +163,6 @@ void setup() {
                     2,           /* priority of the task */
                     &DAQ_TASK,   /* Task handle to keep track of created task */
                     0);          /* pin task to core 0 */                  
-  delay(500);
   xTaskCreatePinnedToCore(
                     DISP_WRAPPER,/* Task function. */
                     "Task2",     /* name of task. */
@@ -237,71 +171,12 @@ void setup() {
                     5,           /* priority of the task */
                     &DISP_TASK,  /* Task handle to keep track of created task */
                     1);          /* pin task to core 1 */
-  delay(500); 
 }
 
 void DAQ() {
-  if(!client.connected()){
-    connect();
-  }
-
-  if(client.available()){
-    uint8_t byte = client.read();
-
-    if(byte == REFRESH){
-      onRefresh();
-    } else if(byte == DISCONNECT){
-      onDisconnect();
-    } else if(byte == START){
-      bladeManager.StartBlade();
-    } else if(byte == STOP){
-      bladeManager.StopBlade();
-    } else if(byte == TEST){
-      client.print("Ready!\r");
-    } else if(byte == THROTTLE){
-      int throttle;
-      client.readBytes((char*) &throttle, sizeof(int));
-      if(throttle < BLADE_STOP_PWM)
-        throttle = BLADE_STOP_PWM;
-      
-      if(throttle > BLADE_MAX_PWM)
-        throttle = BLADE_STOP_PWM;
-
-      bladeManager.SetTarget(throttle);
-    } else if(byte == STATE){
-      char buff[15];
-      sprintf(buff, "%d\r", bladeManager.GetState());
-      client.print(buff);
-    } else if(byte == ANIMATION){
-      int animation;
-      client.readBytes((char*) &animation, sizeof(int));
-      if(animation < 0)
-        animation = 0;
-      if(animation >= NUM_ANIMATIONS)
-        animation = NUM_ANIMATIONS - 1;
-      
-      xSemaphoreTake(bladeMutex, portMAX_DELAY);
-        
-      currIterator = &(frameIterator[animation]);
-      blade.currFrame = currIterator->GetFrame();
-
-      xSemaphoreGive(bladeMutex);
-    } else if(byte == FPS){
-      int fps;
-      client.readBytes((char*) &fps, sizeof(int));
-      if(fps <= 0)
-        fps = 30;
-      currIterator->SetFrameRate(fps);
-    } else if(byte == MULTIPLIER){
-      int mult;
-      client.readBytes((char*) &mult, sizeof(int));
-      double trueMult = mult/1000.0;
-      xSemaphoreTake(bladeMutex, portMAX_DELAY);
-      blade.multiplier = trueMult;
-      xSemaphoreGive(bladeMutex);
-    }
-  }
   
+  comms.Step();
+
   bool reachedZero = bladeManager.Step();
   bool frameChange = currIterator->Step();
   
@@ -362,8 +237,8 @@ void DISP_WRAPPER(void *params){
 
 
 void RENDER(bool refreshPrimary){
-  int dataPin = refreshPrimary ? DATA_PIN_PRIMARY : DATA_PIN_FOLLOWER;
-  int clockPin = refreshPrimary ? CLOCK_PIN_PRIMARY : CLOCK_PIN_FOLLOWER;
+  int dataPin = refreshPrimary ? COPS::DATA_PIN_PRIMARY : COPS::DATA_PIN_FOLLOWER;
+  int clockPin = refreshPrimary ? COPS::CLOCK_PIN_PRIMARY : COPS::CLOCK_PIN_FOLLOWER;
   int regSet = refreshPrimary ? GPIO_OUT_W1TS_REG : GPIO_OUT1_W1TS_REG;
   int regClear = refreshPrimary ? GPIO_OUT_W1TC_REG : GPIO_OUT1_W1TC_REG;
 
@@ -383,7 +258,7 @@ void RENDER(bool refreshPrimary){
   }
 
   // LED Frames
-  for(int i = 0; i < NUM_LEDS; i++) {
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++) {
 
     CRGB push = refreshPrimary ? primary[i] : follower[i];
 
@@ -434,6 +309,69 @@ void RENDER(bool refreshPrimary){
     REG_WRITE(regSet, clockPin);
     REG_WRITE(regClear, clockPin);
   }
+}
+
+void START(WiFiClient client){
+  bladeManager.StartBlade();
+}
+
+void STOP(WiFiClient client){
+  bladeManager.StopBlade();
+}
+
+void TEST(WiFiClient client){
+  client.print("Ready!\r");
+}
+
+void THROTTLE(WiFiClient client){
+  int throttle;
+  client.readBytes((char*) &throttle, sizeof(int));
+  if(throttle < CDAQ::BLADE_STOP_PWM)
+    throttle = CDAQ::BLADE_STOP_PWM;
+  
+  if(throttle > CDAQ::BLADE_MAX_PWM)
+    throttle = CDAQ::BLADE_STOP_PWM;
+
+  bladeManager.SetTarget(throttle);
+}
+
+void STATE(WiFiClient client){
+  char buff[15];  
+  sprintf(buff, "%d\r", bladeManager.GetState());
+  client.print(buff);
+}
+
+void ANIMATION(WiFiClient client){
+  int animation;
+  client.readBytes((char*) &animation, sizeof(int));
+  if(animation < 0)
+    animation = 0;
+  if(animation >= NUM_ANIMATIONS)
+    animation = NUM_ANIMATIONS - 1;
+  
+  xSemaphoreTake(bladeMutex, portMAX_DELAY);
+    
+  currIterator = &(frameIterator[animation]);
+  blade.currFrame = currIterator->GetFrame();
+
+  xSemaphoreGive(bladeMutex);
+}
+
+void FPS(WiFiClient client){
+  int fps;
+  client.readBytes((char*) &fps, sizeof(int));
+  if(fps <= 0)
+    fps = 30;
+  currIterator->SetFrameRate(fps);
+}
+
+void MULTIPLIER(WiFiClient client){
+  int mult;
+  client.readBytes((char*) &mult, sizeof(int));
+  double trueMult = mult/1000.0;
+  xSemaphoreTake(bladeMutex, portMAX_DELAY);
+  blade.multiplier = trueMult;
+  xSemaphoreGive(bladeMutex);
 }
 
 void loop(){

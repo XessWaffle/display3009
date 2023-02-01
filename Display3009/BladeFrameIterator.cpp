@@ -45,15 +45,24 @@ void BladeFrameIterator::AddFrame(BladeFrame* frame){
   if(this->_frameSet == NULL){
     this->_frameSet = frameNode;
     this->_frameDisplay = frameNode;
+    this->_frameLast = frameNode;
 
-    frameNode->prev = frameNode;
-    frameNode->next = frameNode;
+    if(this->_type != animationType::STREAM){
+      frameNode->prev = frameNode;
+      frameNode->next = frameNode;
+    }
   } else {
-    prev = this->_frameSet->prev;
-    prev->next = frameNode;
-    frameNode->prev = prev;
-    frameNode->next = this->_frameSet;
-    this->_frameSet->prev = frameNode;
+    if(this->_type != animationType::STREAM){
+      prev = this->_frameSet->prev;
+      prev->next = frameNode;
+      frameNode->prev = prev;
+      frameNode->next = this->_frameSet;
+      this->_frameSet->prev = frameNode;
+    } else {
+      this->_frameLast->next = frameNode;
+      frameNode->prev = this->_frameLast;
+      this->_frameLast = frameNode;
+    }
   }
 
   this->_frames++;
@@ -90,13 +99,16 @@ bool BladeFrameIterator::Step(){
       this->_frameDisplay = this->_forward ? this->_frameDisplay->next : this->_frameDisplay->prev;
     } else if(this->_type == animationType::STREAM){
       BladeFrameNode *remove = this->_frameDisplay;
-      this->_frameDisplay = this->_frameDisplay->next;
-      this->_frameSet = this->_frameDisplay;
-      this->_frameSet->prev = remove->prev;
-      remove->prev->next = this->_frameSet;
-      
-      remove->frame->Destroy();
-      free(remove);
+
+      if(this->_frameDisplay->next != NULL){
+        this->_frameDisplay = this->_frameDisplay->next;
+        this->_frameSet = this->_frameDisplay;
+
+        this->_frameSet->prev = NULL;
+        
+        remove->frame->Destroy();
+        free(remove);
+      }
     }
 
     int currId = this->_frameDisplay->id;

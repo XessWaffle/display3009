@@ -12,11 +12,11 @@ BladeManager::BladeManager(){
 BladeManager::BladeManager(int motorPin){
 
   this->_motorPin = motorPin;
-  this->_motorWriteValue = BLADE_STOP_PWM;
+  this->_motorWriteValue = CDAQ::BLADE_STOP_PWM;
 
   this->_lastStepped = millis();
   this->_lastTrigger = millis();
-  this->_desiredWrite = BLADE_STOP_PWM;
+  this->_desiredWrite = CDAQ::BLADE_STOP_PWM;
 
   Wire.begin();
   Wire.setClock(200000);
@@ -37,9 +37,9 @@ BladeManager::BladeManager(int motorPin){
   _xl.setFullScale(LIS331::LOW_RANGE);
   
   _motor.attach(motorPin);
-  _motor.writeMicroseconds(BLADE_MAX_PWM);
+  _motor.writeMicroseconds(CDAQ::BLADE_MAX_PWM);
   delay(100);
-  _motor.writeMicroseconds(BLADE_STOP_PWM);
+  _motor.writeMicroseconds(CDAQ::BLADE_STOP_PWM);
 }
 
 void BladeManager::SetState(SpinState state){
@@ -78,7 +78,7 @@ bool BladeManager::Step(){
     this->_zeroTrigger %= 2;
     this->_triggerLatch = true;
     this->_lastTrigger = currentStep;
-  } else if(!_prevAcceleration && accX && currentStep - this->_lastTrigger > SENSOR_TRIGGER_DELAY) {
+  } else if(!_prevAcceleration && accX && currentStep - this->_lastTrigger > CDAQ::SENSOR_TRIGGER_DELAY) {
     this->_triggerLatch = false;
   }
 
@@ -86,9 +86,9 @@ bool BladeManager::Step(){
 
   if(this->_state == SpinState::STARTING){
 
-    if(this->_motorWriteValue >= BLADE_START_PWM){
+    if(this->_motorWriteValue >= CDAQ::BLADE_START_PWM){
       this->_state = SpinState::SPINNING;
-    } else if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY){
+    } else if(currentStep - this->_lastStepped > CDAQ::BLADE_UPDATE_DELAY){
       this->_motorWriteValue += 1;
       this->_lastStepped = currentStep;
     }
@@ -97,29 +97,29 @@ bool BladeManager::Step(){
 
     bool desiredValue = this->_desiredWrite == this->_motorWriteValue;
 
-    if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY && !desiredValue){
+    if(currentStep - this->_lastStepped > CDAQ::BLADE_UPDATE_DELAY && !desiredValue){
       this->_motorWriteValue += this->_motorWriteValue < this->_desiredWrite ? 1 : -1;
 
-      if(this->_motorWriteValue >= BLADE_MAX_PWM)
-        this->_motorWriteValue = BLADE_MAX_PWM;
+      if(this->_motorWriteValue >= CDAQ::BLADE_MAX_PWM)
+        this->_motorWriteValue = CDAQ::BLADE_MAX_PWM;
       
-      if(this->_motorWriteValue <= BLADE_STOP_PWM)
-        this->_motorWriteValue = BLADE_STOP_PWM;
+      if(this->_motorWriteValue <= CDAQ::BLADE_STOP_PWM)
+        this->_motorWriteValue = CDAQ::BLADE_STOP_PWM;
 
       this->_lastStepped = currentStep;
     }
 
   } else if(this->_state == SpinState::STOPPING){
 
-    if(this->_motorWriteValue < BLADE_START_PWM){
+    if(this->_motorWriteValue < CDAQ::BLADE_START_PWM){
       this->_state = SpinState::STOPPED;
-    } else if(currentStep - this->_lastStepped > BLADE_UPDATE_DELAY){
+    } else if(currentStep - this->_lastStepped > CDAQ::BLADE_UPDATE_DELAY){
       this->_motorWriteValue += -1;
       this->_lastStepped = currentStep;
     }
 
   } else if(this->_state == SpinState::STOPPED){
-    this->_motorWriteValue = BLADE_STOP_PWM;
+    this->_motorWriteValue = CDAQ::BLADE_STOP_PWM;
   }
 
   _motor.writeMicroseconds(this->_motorWriteValue);
