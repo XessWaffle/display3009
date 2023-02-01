@@ -2,7 +2,7 @@
 #include "LIS331.h"
 
 Servo _motor;
-Adafruit_MPU6050 _mpu;
+const int MPU = 0x68;
 LIS331 _xl;
 
 BladeManager::BladeManager(){
@@ -15,15 +15,22 @@ BladeManager::BladeManager(int motorPin){
   this->_motorWriteValue = BLADE_STOP_PWM;
 
   this->_lastStepped = millis();
-  this->_lastRead = millis();
-  this->_lastUpdated = micros();
+  this->_lastTrigger = millis();
   this->_desiredWrite = BLADE_STOP_PWM;
 
-  if(_mpu.begin()){
-    _mpu.setGyroRange(MPU6050_RANGE_2000_DEG);
-    _mpu.setAccelerometerRange(MPU6050_RANGE_16_G);
-    _mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-  }
+  Wire.begin();
+  Wire.setClock(200000);
+  Wire.beginTransmission(MPU);
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+   // Configure Accelerometer Sensitivity - Full Scale Range (default +/- 2g)
+  Wire.beginTransmission(MPU);
+  Wire.write(0x1C);                  //Talk to the ACCEL_CONFIG register (1C hex)
+  Wire.write(0x18);                  //Set the register bits as 00010000 (+/- 8g full scale range)
+  Wire.endTransmission(true);
+
   _xl.setI2CAddr(0x19);
   _xl.begin(LIS331::USE_I2C);
   _xl.setODR(LIS331::DR_1000HZ);
@@ -33,22 +40,6 @@ BladeManager::BladeManager(int motorPin){
   _motor.writeMicroseconds(BLADE_MAX_PWM);
   delay(100);
   _motor.writeMicroseconds(BLADE_STOP_PWM);
-
-  this->_omega = (RingNode*) malloc(sizeof(RingNode));
-  this->_omega->next = this->_omega;
-  this->_omega->prev = this->_omega;
-  this->_omega->data = 0;
-  
-  RingNode *head = this->_omega;
-
-  for(int i = 1; i < OMEGA_RING_NODES; i++) {
-    RingNode *next = (RingNode*) malloc(sizeof(RingNode));
-    next->data = 0;
-    next->next = this->_omega;
-    head->next = next;
-    next->prev = head;
-    head = next;
-  }
 }
 
 void BladeManager::SetState(SpinState state){
@@ -60,8 +51,7 @@ int BladeManager::GetState(){
 }
 
 void BladeManager::StartBlade(){
-  if(!this->_timerDisabled)
-    this->_state = SpinState::STARTING;
+  this->_state = SpinState::STARTING;
 }
 
 void BladeManager::StopBlade(){
@@ -73,31 +63,26 @@ void BladeManager::SetTarget(int write){
   this->_desiredWrite = write;
 }
 
-
-double BladeManager::GetAngularVelocity(){
-  double omega = this->_omegaSum / OMEGA_RING_NODES;
-  return omega;
-}
-
 bool BladeManager::Step(){
 
   long currentStep = millis();
 
-  int16_t x, y, z;
-  float xlx, xly, xlz;
-  double omega = -1.0;
-  bool sensorQuery = currentStep - this->_lastRead > SENSOR_QUERY_DELAY;
+  Wire.beginTransmission(MPU);
+  Wire.write(0x3B); // Start with register 0x3B (ACCEL_XOUT_H)
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU, 2, true); // Read 2 registers total
+  bool accX = ((Wire.read() << 8 | Wire.read()) & 1 << 16) != 0; // X-axis value
 
-  if(sensorQuery) {
-    _xl.readAxes(x, y, z);
-    xly = _xl.convertToG(LOW_RANGE_G, y) * GRAVITY;
-    omega = sqrt(abs(xly) / HPM_RADIUS);
-    this->_omegaSum -= this->_omega->data;
-    this->_omegaSum += omega;
-    this->_omega->data = omega;
-    this->_omega = this->_omega->next;
-    this->_lastRead = currentStep;
+  if(!_prevAcceleration && accX && !this->_triggerLatch) {
+    this->_zeroTrigger += 1;
+    this->_zeroTrigger %= 2;
+    this->_triggerLatch = true;
+    this->_lastTrigger = currentStep;
+  } else if(!_prevAcceleration && accX && currentStep - this->_lastTrigger > SENSOR_TRIGGER_DELAY) {
+    this->_triggerLatch = false;
   }
+
+  _prevAcceleration = accX;
 
   if(this->_state == SpinState::STARTING){
 
@@ -139,6 +124,6 @@ bool BladeManager::Step(){
 
   _motor.writeMicroseconds(this->_motorWriteValue);
 
-  return omega > 0.0;
+  return !this->_zeroTrigger;
 }
 

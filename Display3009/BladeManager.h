@@ -3,8 +3,6 @@
 
 #include <ESP32Servo.h>
 #include <Arduino.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
 #include <Wire.h>
 #include "BladeFrame.h"
 
@@ -23,9 +21,7 @@
 
 #define GRAVITY 9.80665
 
-#define SENSOR_QUERY_DELAY 1000
-
-#define OMEGA_RING_NODES 10
+#define SENSOR_TRIGGER_DELAY 15
 
 enum SpinState{STARTING, SPINNING, STOPPING, STOPPED};
 
@@ -43,31 +39,22 @@ class BladeManager{
     void SetTrigger(BladeFrame *frame, struct CRGB *primary, struct CRGB *follower);
     void SetTarget(int write);
 
-    double GetAngularVelocity();
-
     bool Step();
 
   private:
-    struct RingNode{
-      float data = 0;
-      RingNode *prev, *next;
-    };
 
-  private:
-
-    bool _timerDisabled;
+    bool _triggerLatch = false;
+    bool _prevAcceleration = false;
+    int _zeroTrigger = 0;
 
     int _motorPin;
     int _motorWriteValue;
     int _state = SpinState::STOPPED;
     int _numLeds;
 
-    long _lastStepped, _lastRead, _lastUpdated;
-    long _omegaSum = 0;
+    long _lastStepped, _lastTrigger;
     
     double _desiredWrite;
-
-    RingNode *_omega;
 };
 
 #endif

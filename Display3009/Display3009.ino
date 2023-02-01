@@ -8,7 +8,8 @@
 
 #define NUM_LEDS 72
 #define NUM_STRIPS 2
-#define NUM_ANIMATIONS 5
+#define NUM_ANIMATIONS 6
+
 
 // For led chips like WS2812, which have a data line, ground, and power, you just
 // need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
@@ -36,25 +37,26 @@ uint8_t createStreamClient(uint8_t id) {
 #define MESSAGE_PAUSE 0xFF
 #define REFRESH 0xFF
 #define DISCONNECT 0xFE
-#define STREAM 0xFD
 #define THROTTLE createWriteInstruction(0x00)
 #define START createWriteInstruction(0x01)
 #define STOP createWriteInstruction(0x02)
 #define TEST createReadInstruction(0x03)
-#define DATA createReadInstruction(0x04)
 #define STATE createReadInstruction(0x05)
 #define ANIMATION createWriteInstruction(0x06)
 #define FPS createWriteInstruction(0x07)
+#define MULTIPLIER createWriteInstruction(0x08)
 
 // Define the array of leds
 struct CRGB primary[NUM_LEDS], follower[NUM_LEDS];
 
 struct Blade{
   double omega = 40, theta;
+  double multiplier = 1.0;
+  double rezero = true;
   BladeFrame *currFrame = NULL;
 };
 
-Blade blade;
+volatile Blade blade;
 BladeManager bladeManager;
 BladeFrameIterator frameIterator[NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
@@ -87,10 +89,10 @@ void onRefresh(){
   writeInstruction("start", START);
   writeInstruction("stop", STOP);
   writeInstruction("test", TEST);
-  writeInstruction("data", DATA);
   writeInstruction("state", STATE);
-  writeInstruction("animation", ANIMATION);
+  writeInstruction("anim", ANIMATION);
   writeInstruction("fps", FPS);
+  writeInstruction("mult", MULTIPLIER);
 }
 
 void onDisconnect(){
@@ -131,7 +133,7 @@ void prepAnimations(){
   frameIterator[2] = BladeFrameIterator();
   ArmFrame *purple = new ArmFrame(NUM_LEDS);
   for(int i = 0; i < NUM_LEDS; i+=3){
-    purple->SetLED(i, CRGB::Purple);
+    purple->SetLED(i, CRGB(255, 0, 255));
   }
 
   for(int i = 0; i < 20; i++){
@@ -156,7 +158,7 @@ void prepAnimations(){
   ArmFrame *white = new ArmFrame(NUM_LEDS), *redFull = new ArmFrame(NUM_LEDS), *greenFull = new ArmFrame(NUM_LEDS), *blueFull = new ArmFrame(NUM_LEDS);
   for(int i = 0; i < NUM_LEDS; i++){
     redFull->SetLED(i, CRGB::Red);
-    greenFull->SetLED(i, CRGB::Green);
+    greenFull->SetLED(i, CRGB(0, 255, 0));
     blueFull->SetLED(i, CRGB::Blue);
     white->SetLED(i, CRGB::White);    
   }
@@ -177,16 +179,31 @@ void prepAnimations(){
   f1->AddArmFrame(white, 0.0);
   frameIterator[4].AddFrame(f1);
 
+  frameIterator[5] = BladeFrameIterator();
+  ArmFrame *test = new ArmFrame(NUM_LEDS);
+  for(int i = 0; i <= NUM_LEDS; i++){
+    if(i % 5 == 0)
+      test->SetLED(i, CRGB::Gold);
+  }
+
+  f1 = new BladeFrame();
+  f1->AddArmFrame(pre, 0.0);
+  for(int i = 1; i < 100; i++){
+    f1->AddArmFrame(i%2 == 0 ? test : black, i * TWO_PI/100);
+  }
+  frameIterator[5].AddFrame(f1);
+
 }
+
 
 void setup() {
 
   Serial.begin(115200);
 
-  FastLED.addLeds<SK9822, DATA_PIN_PRIMARY, CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(30)>(primary, NUM_LEDS);  // BGR ordering is typical
-  FastLED.addLeds<SK9822, DATA_PIN_FOLLOWER, CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(30)>(follower, NUM_LEDS);  // BGR ordering is typical
-  FastLED.setMaxRefreshRate(0);
-  
+  FastLED.addLeds<SK9822, DATA_PIN_PRIMARY, CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, NUM_LEDS);  // BGR ordering is typical
+  FastLED.addLeds<SK9822, DATA_PIN_FOLLOWER, CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, NUM_LEDS);  // BGR ordering is typical
+  //FastLED.setMaxRefreshRate(0);
+
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -196,7 +213,7 @@ void setup() {
   connect();
 
   bladeManager = BladeManager(MOTOR_PIN);
-  bladeManager.SetTarget(1250);
+  bladeManager.SetTarget(1300);
 
   prepAnimations();
 
@@ -208,17 +225,16 @@ void setup() {
                     "Data",      /* name of task. */
                     8192,        /* Stack size of task */
                     NULL,        /* parameter of the task */
-                    1,           /* priority of the task */
+                    2,           /* priority of the task */
                     &DAQ_TASK,   /* Task handle to keep track of created task */
                     0);          /* pin task to core 0 */                  
-  delay(500); 
-
+  delay(500);
   xTaskCreatePinnedToCore(
                     DISP_WRAPPER,/* Task function. */
                     "Task2",     /* name of task. */
                     8192,        /* Stack size of task */
                     NULL,        /* parameter of the task */
-                    1,           /* priority of the task */
+                    5,           /* priority of the task */
                     &DISP_TASK,  /* Task handle to keep track of created task */
                     1);          /* pin task to core 1 */
   delay(500); 
@@ -242,10 +258,6 @@ void DAQ() {
       bladeManager.StopBlade();
     } else if(byte == TEST){
       client.print("Ready!\r");
-    } else if(byte == DATA){
-      char buff[30];
-      sprintf(buff, "%.2f\r", bladeManager.GetAngularVelocity());
-      client.print(buff);
     } else if(byte == THROTTLE){
       int throttle;
       client.readBytes((char*) &throttle, sizeof(int));
@@ -267,75 +279,160 @@ void DAQ() {
         animation = 0;
       if(animation >= NUM_ANIMATIONS)
         animation = NUM_ANIMATIONS - 1;
-
-      currIterator = &(frameIterator[animation]);
       
+      xSemaphoreTake(bladeMutex, portMAX_DELAY);
+        
+      currIterator = &(frameIterator[animation]);
+      blade.currFrame = currIterator->GetFrame();
+
+      xSemaphoreGive(bladeMutex);
     } else if(byte == FPS){
       int fps;
       client.readBytes((char*) &fps, sizeof(int));
       if(fps <= 0)
         fps = 30;
       currIterator->SetFrameRate(fps);
+    } else if(byte == MULTIPLIER){
+      int mult;
+      client.readBytes((char*) &mult, sizeof(int));
+      double trueMult = mult/1000.0;
+      xSemaphoreTake(bladeMutex, portMAX_DELAY);
+      blade.multiplier = trueMult;
+      xSemaphoreGive(bladeMutex);
     }
   }
   
-  bladeManager.Step();
+  bool reachedZero = bladeManager.Step();
   bool frameChange = currIterator->Step();
   
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
 
   if(currIterator != NULL && frameChange)
     blade.currFrame = currIterator->GetFrame(); 
-  //blade.omega = bladeManager.GetAngularVelocity();
+
+  if(reachedZero && blade.rezero){
+    blade.theta = 0.0;
+    blade.rezero = false;
+  }
   
   xSemaphoreGive(bladeMutex);
 
 }
 
-void DISP(long step) {
+void DISP(long step, bool updatePrimary) {
+ 
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
 
-  blade.theta += blade.omega * step * 0.000001;
-  if(blade.theta > TWO_PI)
+  blade.theta += blade.multiplier * blade.omega * step * 0.000001;
+  if(blade.theta > TWO_PI) {
     blade.theta -= TWO_PI;
+    blade.rezero = true;
+  }
+
+  ArmFrame *frame = NULL;
+  bool frameUpdated = false;
+
+  if(blade.currFrame != NULL){
+    frameUpdated = updatePrimary ? blade.currFrame->UpdatePrimaryFrame(blade.theta) : blade.currFrame->UpdateFollowerFrame(blade.theta);
+    frame = updatePrimary ? blade.currFrame->GetPrimaryFrame() : blade.currFrame->GetFollowerFrame();
+  }
 
   xSemaphoreGive(bladeMutex);
 
-  if(blade.currFrame != NULL){
-
-    xSemaphoreTake(bladeMutex, portMAX_DELAY);
-
-    uint8_t status = blade.currFrame->UpdateArmFrame(blade.theta);
-    bool primaryUpdated = (status & 0x2) > 0, followerUpdated = (status & 0x1) > 0;
-
-    xSemaphoreGive(bladeMutex);
-   
-    ArmFrame *primaryFrame = NULL, *followerFrame = NULL;
-    primaryFrame = blade.currFrame->GetPrimaryFrame();
-    followerFrame = blade.currFrame->GetFollowerFrame();
-
-    if(primaryFrame != NULL && primaryUpdated){
-      primaryFrame->Trigger(primary);
-      FastLED[0].showLeds(128);
-    }    
-    if(followerFrame != NULL && followerUpdated){
-      followerFrame->Trigger(follower);
-      FastLED[1].showLeds(128);
-    }
+  if(frame != NULL && frameUpdated){
+    frame->Trigger(updatePrimary ? primary : follower);
+    RENDER(updatePrimary);
   }
-
 }
 
-void DAQ_WRAPPER(void *sp){
+void DAQ_WRAPPER(void *params){
   for(;;) DAQ();
 }
 
-void DISP_WRAPPER(void *sp){
+void DISP_WRAPPER(void *params){
   long step = 0;
+  bool primary = true;
   for(;;) {
     long time = micros();
-    DISP(step);
+    DISP(step, primary);
+    primary = !primary;
     step = micros() - time;
+  }
+}
+
+
+void RENDER(bool refreshPrimary){
+  int dataPin = refreshPrimary ? DATA_PIN_PRIMARY : DATA_PIN_FOLLOWER;
+  int clockPin = refreshPrimary ? CLOCK_PIN_PRIMARY : CLOCK_PIN_FOLLOWER;
+  int regSet = refreshPrimary ? GPIO_OUT_W1TS_REG : GPIO_OUT1_W1TS_REG;
+  int regClear = refreshPrimary ? GPIO_OUT_W1TC_REG : GPIO_OUT1_W1TC_REG;
+
+  dataPin = dataPin > 32 ? dataPin - 32 : dataPin;
+  dataPin = 1 << dataPin;
+  clockPin = clockPin > 32 ? clockPin - 32 : clockPin;
+  clockPin = 1 << clockPin;
+
+  REG_WRITE(regClear, clockPin);
+  REG_WRITE(regClear, dataPin);
+
+  // Start Frame
+  REG_WRITE(regClear, dataPin);
+  for(int i = 0; i < 32; i++){
+    REG_WRITE(regSet, clockPin);
+    REG_WRITE(regClear, clockPin);
+  }
+
+  // LED Frames
+  for(int i = 0; i < NUM_LEDS; i++) {
+
+    CRGB push = refreshPrimary ? primary[i] : follower[i];
+
+    // LED Frame Brightness
+    REG_WRITE(regSet, dataPin);
+    for(int j = 0; j < 8; j++){
+      REG_WRITE(regSet, clockPin);
+      REG_WRITE(regClear, clockPin);
+    }
+
+    int j = 1;
+    // LED Blue
+    while(true){
+      if(j >= 1 << 8) break;
+      bool set = (push.blue & j) > 0;
+      REG_WRITE(set ? regSet : regClear, dataPin);
+      REG_WRITE(regSet, clockPin);
+      REG_WRITE(regClear, clockPin);
+      j = j << 1;
+    }
+    
+    j = 1;
+    // LED Green
+    while(true){
+      if(j >= 1 << 8) break;
+      bool set = (push.green & j) > 0;
+      REG_WRITE(set ? regSet : regClear, dataPin);
+      REG_WRITE(regSet, clockPin);
+      REG_WRITE(regClear, clockPin);
+      j = j << 1;
+    }
+    
+    j = 1;
+    // LED Red 
+    while(true){
+      if(j >= 1 << 8) break;
+      bool set = (push.red & j) > 0;
+      REG_WRITE(set ? regSet : regClear, dataPin);
+      REG_WRITE(regSet, clockPin);
+      REG_WRITE(regClear, clockPin);
+      j = j << 1;
+    }
+  }
+
+  // End Frame
+  REG_WRITE(regClear, dataPin);
+  for(int i = 0; i < 36; i++){
+    REG_WRITE(regSet, clockPin);
+    REG_WRITE(regClear, clockPin);
   }
 }
 

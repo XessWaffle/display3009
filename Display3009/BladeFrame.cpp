@@ -22,6 +22,11 @@ void BladeFrame::Destroy(){
 
 }
 
+void BladeFrame::OnFrameEntry(){
+  this->_primary = NULL;
+  this->_follower = NULL;
+}
+
 
 void BladeFrame::AddArmFrame(ArmFrame* frame, double theta){
   
@@ -60,18 +65,14 @@ void BladeFrame::AddArmFrame(ArmFrame* frame, double theta){
 
 }
 
-uint8_t BladeFrame::UpdateArmFrame(double theta){
-
-  double followerTheta = theta + PI;
+bool BladeFrame::UpdatePrimaryFrame(double theta){
 
   while(theta < 0) theta += TWO_PI;
   while(theta >= TWO_PI) theta -= TWO_PI;
-  while(followerTheta >= TWO_PI) followerTheta -= TWO_PI;
   
-  ArmFrameNode *tempPrimary = this->_primary, *tempFollower = this->_follower;
+  ArmFrameNode *tempPrimary = this->_primary;
 
   if(this->_primary == NULL) this->_primary = this->_root;
-  if(this->_follower == NULL) this->_follower = this->_root;
 
   int count = 0;
 
@@ -82,7 +83,24 @@ uint8_t BladeFrame::UpdateArmFrame(double theta){
     this->_primary = this->_primary->next;
     count++;
   }
-  count = 0;
+
+  return this->_primary != tempPrimary;
+
+
+}
+
+bool BladeFrame::UpdateFollowerFrame(double theta){
+
+  double followerTheta = theta + PI;
+
+  while(followerTheta >= TWO_PI) followerTheta -= TWO_PI;
+  
+  ArmFrameNode *tempFollower = this->_follower;
+
+  if(this->_follower == NULL) this->_follower = this->_root;
+
+  int count = 0;
+
   while(count < this->_frames) {
     if(this->_follower->theta <= followerTheta && 
       (this->_follower->next->theta < this->_follower->theta || this->_follower->next->theta > followerTheta))
@@ -91,7 +109,7 @@ uint8_t BladeFrame::UpdateArmFrame(double theta){
     count++;
   }
 
-  return (uint8_t) ((this->_primary != tempPrimary) << 1) | (this->_follower != tempFollower);
+  return this->_follower != tempFollower;
 
 }
  

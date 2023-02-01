@@ -5,8 +5,6 @@
 
 #include "BladeFrame.h"
 
-extern void stream(const char* info);
-
 struct BladeFrameNode{
   int id;
   
@@ -17,7 +15,7 @@ struct BladeFrameNode{
 class BladeFrameIterator{
   public:
 
-    typedef enum {LOOP, REWIND} animationType;
+    typedef enum {LOOP, REWIND, STREAM} animationType;
 
     BladeFrameIterator();
     BladeFrameIterator(animationType type);

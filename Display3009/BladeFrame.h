@@ -19,8 +19,11 @@ class BladeFrame{
 
     void Destroy();
 
+    void OnFrameEntry();
+
     void AddArmFrame(ArmFrame* frame, double theta);
-    uint8_t UpdateArmFrame(double theta);
+    bool UpdatePrimaryFrame(double theta);
+    bool UpdateFollowerFrame(double theta);
     ArmFrame *GetPrimaryFrame();
     ArmFrame *GetFollowerFrame();
   
