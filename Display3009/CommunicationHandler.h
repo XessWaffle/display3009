@@ -3,14 +3,6 @@
 
 #include <WiFi.h>
 
-struct HandlerNode{
-  uint8_t instByte;
-  int bytes;
-  void (*handler)(WiFiClient*) = NULL;
-
-  HandlerNode *next;
-};
-
 struct InstructionNode{
   uint8_t instByte;
   uint8_t buff[30];
@@ -18,7 +10,15 @@ struct InstructionNode{
   WiFiClient *client;
 
   InstructionNode *next;
-}
+};
+
+struct HandlerNode{
+  uint8_t instByte;
+  int bytes;
+  void (*handler)(InstructionNode*) = NULL;
+
+  HandlerNode *next;
+};
 
 class CommunicationHandler{
   public:
@@ -35,6 +35,7 @@ class CommunicationHandler{
   private:
     void SendInstruction(const char* instStr, uint8_t inst);
     void Connect();
+    HandlerNode *GetInstructionHandler(uint8_t instByte);
 
   private:
     WiFiClient _client;

@@ -22,7 +22,7 @@ BladeFrameCreator frameCreator;
 BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
 
-TaskHandle_t DAQ_TASK, DISP_TASK;
+TaskHandle_t DAQ_TASK, DISP_TASK, COMM_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
 
 CommunicationHandler comms = CommunicationHandler();
@@ -174,10 +174,18 @@ void setup() {
                     NULL,        /* parameter of the task */
                     2,           /* priority of the task */
                     &DAQ_TASK,   /* Task handle to keep track of created task */
+                    0);          /* pin task to core 0 */       
+  xTaskCreatePinnedToCore(
+                    COMM_WRAPPER, /* Task function. */
+                    "Byte",      /* name of task. */
+                    8192,        /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    2,           /* priority of the task */
+                    &COMM_TASK,   /* Task handle to keep track of created task */
                     0);          /* pin task to core 0 */                  
   xTaskCreatePinnedToCore(
                     DISP_WRAPPER,/* Task function. */
-                    "Task2",     /* name of task. */
+                    "Display",   /* name of task. */
                     8192,        /* Stack size of task */
                     NULL,        /* parameter of the task */
                     5,           /* priority of the task */
@@ -187,7 +195,7 @@ void setup() {
 
 void DAQ() {
   
-  comms.Step();
+  comms.Handle();
 
   bool reachedZero = bladeManager.Step();
   bool frameChange = currIterator->Step();
@@ -232,6 +240,10 @@ void DISP(long step, bool updatePrimary) {
   }
 }
 
+void COMM(){
+  comms.Populate();
+}
+
 void DAQ_WRAPPER(void *params){
   for(;;) DAQ();
 }
@@ -245,6 +257,10 @@ void DISP_WRAPPER(void *params){
     primary = !primary;
     step = micros() - time;
   }
+}
+
+void COMM_WRAPPER(void* params){
+  for(;;) COMM();
 }
 
 
@@ -332,12 +348,12 @@ void STOP(InstructionNode *node){
 }
 
 void TEST(InstructionNode *node){
-  client->print("Ready!\r");
+  node->client->print("Ready!\r");
 }
 
 void THROTTLE(InstructionNode *node){
   int throttle;
-  client->readBytes((char*) &throttle, sizeof(int));
+  memcpy(&throttle, node->buff, sizeof(int));
   if(throttle < CDAQ::BLADE_STOP_PWM)
     throttle = CDAQ::BLADE_STOP_PWM;
   
@@ -350,12 +366,12 @@ void THROTTLE(InstructionNode *node){
 void STATE(InstructionNode *node){
   char buff[15];  
   sprintf(buff, "%d\r", bladeManager.GetState());
-  client->print(buff);
+  node->client->print(buff);
 }
 
 void ANIMATION(InstructionNode *node){
   int animation;
-  client->readBytes((char*) &animation, sizeof(int));
+  memcpy(&animation, node->buff, sizeof(int));
   if(animation < 0)
     animation = 0;
   if(animation >= CRENDER::NUM_ANIMATIONS)
@@ -371,7 +387,7 @@ void ANIMATION(InstructionNode *node){
 
 void FPS(InstructionNode *node){
   int fps;
-  client->readBytes((char*) &fps, sizeof(int));
+  memcpy(&fps, node->buff, sizeof(int));
   if(fps <= 0)
     fps = 30;
   currIterator->SetFrameRate(fps);
@@ -379,7 +395,7 @@ void FPS(InstructionNode *node){
 
 void MULTIPLIER(InstructionNode *node){
   int mult;
-  client->readBytes((char*) &mult, sizeof(int));
+  memcpy(&mult, node->buff, sizeof(int));
   double trueMult = mult/1000.0;
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
   blade.multiplier = trueMult;
@@ -388,26 +404,26 @@ void MULTIPLIER(InstructionNode *node){
 
 void STAGE_FRAME(InstructionNode *node){
   int sectors;
-  client->readBytes((char*) &sectors, sizeof(int));
+  memcpy(&sectors, node->buff, sizeof(int));
   frameCreator.StageFrame(sectors);
 }
 
 void STAGE_ARM(InstructionNode *node){
   int sector;
-  client->readBytes((char*) &sector, sizeof(int));
+  memcpy(&sector, node->buff, sizeof(int));
   frameCreator.StageArm(sector);
 }
 
 void SET_LED(InstructionNode *node){
   int led, color;
-  client->readBytes((char*) &led, sizeof(int));
-  client->readBytes((char*) &color, sizeof(int));
+  memcpy(&led, node->buff, sizeof(int));
+  memcpy(&color, node->buff + sizeof(int), sizeof(int));
   frameCreator.SetLED(led, CRGB(color));
 }
 
 void COMMIT_ARM(InstructionNode *node){
   frameCreator.CommitArm();
-  client->print("1\r");
+  node->client->print("1\r");
 }
 
 void COMMIT_FRAME(InstructionNode *node){
@@ -418,7 +434,7 @@ void COMMIT_FRAME(InstructionNode *node){
 
   xSemaphoreGive(bladeMutex);  
   
-  client->print("1\r");
+  node->client->print("1\r");
 }
 
 void loop(){

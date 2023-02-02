@@ -9,7 +9,7 @@ class ArmFrame{
     ArmFrame();
     ArmFrame(int numLeds);
 
-    void SetLED(int led, CRGB color);
+    void SetLED(int led, struct CRGB color);
     void Destroy();
 
     void Trigger(struct CRGB *mod);

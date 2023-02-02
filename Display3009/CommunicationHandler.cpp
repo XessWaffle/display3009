@@ -7,7 +7,7 @@ CommunicationHandler::CommunicationHandler(){
 
 }
 
-void CommunicationHandler::SetHandler(uint8_t inst, void (*handler)(WiFiClient*), int requiredBytes){
+void CommunicationHandler::SetHandler(uint8_t inst, void (*handler)(InstructionNode*), int requiredBytes){
   HandlerNode *instNode = (HandlerNode*) malloc(sizeof(HandlerNode));
   instNode->handler = handler;
   instNode->instByte = inst;
@@ -47,20 +47,18 @@ void CommunicationHandler::OnDisconnect(){
 void CommunicationHandler::Handle(){
   if(this->_headInst != NULL){
 
-    HandlerNode *head = this->_head;
-    while(head != NULL){
-      if(head->instByte == this->_headInst->instByte){
-        (*(head->handler))(&this->_headInst);
-        break;     
-      } 
-      head = head->next;
-    }
+    HandlerNode *instHandler = this->GetInstructionHandler(this->_headInst->instByte);
+    if(instHandler != NULL)
+      (*(instHandler->handler))(this->_headInst);
 
     xSemaphoreTake(this->_dataMutex, portMAX_DELAY);
+
     InstructionNode *remove = this->_headInst;
     this->_headInst = this->_headInst->next;
-    free(remove)
+    free(remove);
+
     xSemaphoreGive(this->_dataMutex);
+
   }
 }
 
@@ -76,19 +74,12 @@ void CommunicationHandler::Populate(){
       _stagedInst->next = NULL;
       _stagedInst->client = &(this->_client);
 
-      HandlerNode *head = this->_head;
-      bool foundInst = false;
-      while(head != NULL){
-        if(head->instByte == byte){
-          _stagedInst.byteCounter = head->bytes;
-          _stagedInst.instByte = byte;
-          foundInst = true;
-          break;
-        }
-        head = head->next;
-      }
+      HandlerNode *instHandler = this->GetInstructionHandler(byte);
 
-      if(!foundInst){
+      if(instHandler != NULL){
+        _stagedInst->byteCounter = instHandler->bytes;
+        _stagedInst->instByte = byte;
+      } else {
         free(_stagedInst);
         _stagedInst = NULL;
       }
@@ -125,4 +116,16 @@ void CommunicationHandler::Connect(){
   if (this->_client.connect(CCOMMS::XESSAMD, CCOMMS::PORT)) {
     this->_client.write((uint8_t) CCOMMS::ID);
   }
+}
+
+HandlerNode *CommunicationHandler::GetInstructionHandler(uint8_t instByte){
+  HandlerNode *head = this->_head;
+  while(head != NULL){
+    if(head->instByte == instByte){
+      return head;
+    }
+    head = head->next;
+  }
+  
+  return NULL;
 }
