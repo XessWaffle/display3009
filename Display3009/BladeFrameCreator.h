@@ -2,14 +2,13 @@
 #define BLADE_FRAME_CREATOR_H
 
 #include "BladeFrame.h"
-#include "Constants.h"
 
 class BladeFrameCreator{
   public:
     BladeFrameCreator();
 
-    bool StageFrame();
-    bool StageArm(double theta);
+    bool StageFrame(int sectors);
+    bool StageArm(int sector);
     bool SetLED(int index, struct CRGB color);
     bool CommitArm();
     BladeFrame *CommitFrame();
@@ -17,6 +16,8 @@ class BladeFrameCreator{
   private:
     BladeFrame *_stagedFrame = NULL;
     ArmFrame *_stagedArm = NULL;
+
+    int _sectors;
 };
 
 

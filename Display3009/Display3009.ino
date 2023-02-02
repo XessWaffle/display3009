@@ -1,9 +1,9 @@
 #include <FastLED.h>
 #include <ESP32Servo.h>
-#include <WiFi.h>
+#include "Constants.h"
 #include "BladeManager.h" 
 #include "BladeFrameIterator.h"
-#include "Constants.h"
+#include "BladeFrameCreator.h"
 #include "CommunicationHandler.h"
 
 // Define the array of leds
@@ -18,13 +18,30 @@ struct Blade{
 
 volatile Blade blade;
 BladeManager bladeManager;
+BladeFrameCreator frameCreator;
 BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
 
 TaskHandle_t DAQ_TASK, DISP_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
 
-CommunicationHandler comms;
+CommunicationHandler comms = CommunicationHandler();
+
+void prepCommunications(){
+  comms.SetHandler(CCOMMS::START, &START, 0);
+  comms.SetHandler(CCOMMS::STOP, &STOP, 0);
+  comms.SetHandler(CCOMMS::STATE, &STATE, 0);
+  comms.SetHandler(CCOMMS::TEST, &TEST, 0);
+  comms.SetHandler(CCOMMS::THROTTLE, &THROTTLE, sizeof(int));
+  comms.SetHandler(CCOMMS::ANIMATION, &ANIMATION, sizeof(int));
+  comms.SetHandler(CCOMMS::FPS, &FPS, sizeof(int));
+  comms.SetHandler(CCOMMS::MULTIPLIER, &MULTIPLIER, sizeof(int));
+  comms.SetHandler(CCOMMS::STAGE_FRAME, &STAGE_FRAME, sizeof(int));
+  comms.SetHandler(CCOMMS::STAGE_ARM, &STAGE_ARM, sizeof(int));
+  comms.SetHandler(CCOMMS::SET_LED, &SET_LED, 2 * sizeof(int));
+  comms.SetHandler(CCOMMS::COMMIT_ARM, &COMMIT_ARM, 0);
+  comms.SetHandler(CCOMMS::COMMIT_FRAME, &COMMIT_FRAME, 0);
+}
 
 void prepAnimations(){
   frameIterator[0] = BladeFrameIterator();
@@ -120,6 +137,9 @@ void prepAnimations(){
   }
   frameIterator[5].AddFrame(f1);
 
+  frameIterator[6] = BladeFrameIterator(BladeFrameIterator::STREAM);
+  frameCreator = BladeFrameCreator();
+
 }
 
 
@@ -137,16 +157,8 @@ void setup() {
       delay(500);
   }
 
-  comms = CommunicationHandler();
-  comms.SetHandler(CCOMMS::START, &START);
-  comms.SetHandler(CCOMMS::STOP, &STOP);
-  comms.SetHandler(CCOMMS::STATE, &STATE);
-  comms.SetHandler(CCOMMS::TEST, &TEST);
-  comms.SetHandler(CCOMMS::THROTTLE, &THROTTLE);
-  comms.SetHandler(CCOMMS::ANIMATION, &ANIMATION);
-  comms.SetHandler(CCOMMS::FPS, &FPS);
-  comms.SetHandler(CCOMMS::MULTIPLIER, &MULTIPLIER);
-
+  prepCommunications();
+  
   bladeManager = BladeManager(COPS::MOTOR_PIN);
   bladeManager.SetTarget(1300);
 
@@ -311,21 +323,21 @@ void RENDER(bool refreshPrimary){
   }
 }
 
-void START(WiFiClient client){
+void START(InstructionNode *node){
   bladeManager.StartBlade();
 }
 
-void STOP(WiFiClient client){
+void STOP(InstructionNode *node){
   bladeManager.StopBlade();
 }
 
-void TEST(WiFiClient client){
-  client.print("Ready!\r");
+void TEST(InstructionNode *node){
+  client->print("Ready!\r");
 }
 
-void THROTTLE(WiFiClient client){
+void THROTTLE(InstructionNode *node){
   int throttle;
-  client.readBytes((char*) &throttle, sizeof(int));
+  client->readBytes((char*) &throttle, sizeof(int));
   if(throttle < CDAQ::BLADE_STOP_PWM)
     throttle = CDAQ::BLADE_STOP_PWM;
   
@@ -335,19 +347,19 @@ void THROTTLE(WiFiClient client){
   bladeManager.SetTarget(throttle);
 }
 
-void STATE(WiFiClient client){
+void STATE(InstructionNode *node){
   char buff[15];  
   sprintf(buff, "%d\r", bladeManager.GetState());
-  client.print(buff);
+  client->print(buff);
 }
 
-void ANIMATION(WiFiClient client){
+void ANIMATION(InstructionNode *node){
   int animation;
-  client.readBytes((char*) &animation, sizeof(int));
+  client->readBytes((char*) &animation, sizeof(int));
   if(animation < 0)
     animation = 0;
-  if(animation >= NUM_ANIMATIONS)
-    animation = NUM_ANIMATIONS - 1;
+  if(animation >= CRENDER::NUM_ANIMATIONS)
+    animation = CRENDER::NUM_ANIMATIONS - 1;
   
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
     
@@ -357,21 +369,56 @@ void ANIMATION(WiFiClient client){
   xSemaphoreGive(bladeMutex);
 }
 
-void FPS(WiFiClient client){
+void FPS(InstructionNode *node){
   int fps;
-  client.readBytes((char*) &fps, sizeof(int));
+  client->readBytes((char*) &fps, sizeof(int));
   if(fps <= 0)
     fps = 30;
   currIterator->SetFrameRate(fps);
 }
 
-void MULTIPLIER(WiFiClient client){
+void MULTIPLIER(InstructionNode *node){
   int mult;
-  client.readBytes((char*) &mult, sizeof(int));
+  client->readBytes((char*) &mult, sizeof(int));
   double trueMult = mult/1000.0;
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
   blade.multiplier = trueMult;
   xSemaphoreGive(bladeMutex);
+}
+
+void STAGE_FRAME(InstructionNode *node){
+  int sectors;
+  client->readBytes((char*) &sectors, sizeof(int));
+  frameCreator.StageFrame(sectors);
+}
+
+void STAGE_ARM(InstructionNode *node){
+  int sector;
+  client->readBytes((char*) &sector, sizeof(int));
+  frameCreator.StageArm(sector);
+}
+
+void SET_LED(InstructionNode *node){
+  int led, color;
+  client->readBytes((char*) &led, sizeof(int));
+  client->readBytes((char*) &color, sizeof(int));
+  frameCreator.SetLED(led, CRGB(color));
+}
+
+void COMMIT_ARM(InstructionNode *node){
+  frameCreator.CommitArm();
+  client->print("1\r");
+}
+
+void COMMIT_FRAME(InstructionNode *node){
+  xSemaphoreTake(bladeMutex, portMAX_DELAY);
+
+  BladeFrame *committed = frameCreator.CommitFrame();
+  frameIterator[CRENDER::NUM_ANIMATIONS - 1].AddFrame(committed);
+
+  xSemaphoreGive(bladeMutex);  
+  
+  client->print("1\r");
 }
 
 void loop(){

@@ -1,6 +1,8 @@
 #include "BladeManager.h"
 #include "LIS331.h"
 
+#include "Constants.h"
+
 Servo _motor;
 const int MPU = 0x68;
 LIS331 _xl;

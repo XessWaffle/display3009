@@ -1,31 +1,39 @@
 #include "BladeFrameCreator.h"
 
-BladeFrameCreator::BladeFrameCreator();
+#include "Constants.h"
 
-bool BladeFrameCreator::StageFrame(){
+BladeFrameCreator::BladeFrameCreator(){
+
+}
+
+bool BladeFrameCreator::StageFrame(int sectors){
   if(this->_stagedFrame != NULL) return false;
+  this->_sectors = sectors;
   _stagedFrame = new BladeFrame();
   return true;
 }
 
-bool BladeFrameCreator::StageArm(double theta){
-  if(this->_stagedFrame != NULL || this->_stagedArm != NULL) return false;
+bool BladeFrameCreator::StageArm(int sector){
+  if(this->_stagedFrame == NULL || this->_stagedArm != NULL) return false;
+  double theta = (double) sector/this->_sectors * TWO_PI;
   this->_stagedArm = new ArmFrame(CRENDER::NUM_LEDS);
   this->_stagedFrame->AddArmFrame(this->_stagedArm, theta);
   return true;
 }
 
-bool SetLED(int index, struct CRGB color){
+bool BladeFrameCreator::SetLED(int index, struct CRGB color){
   if(this->_stagedArm == NULL) return false;
   this->_stagedArm->SetLED(index, color);
+  return true;
 }
 
 bool BladeFrameCreator::CommitArm(){
   this->_stagedArm = NULL;
+  return true;
 }
 
 BladeFrame *BladeFrameCreator::CommitFrame(){
   BladeFrame *_staged = this->_stagedFrame;
   this->_stagedFrame = NULL;
-  return *_staged;
+  return _staged;
 }
