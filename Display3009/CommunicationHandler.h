@@ -5,7 +5,10 @@
 
 struct InstructionNode{
   uint8_t instByte;
-  uint8_t buff[30];
+  union{  
+    uint8_t buff[32];
+    int data[8];
+  }
   int size = 0, byteCounter = 0;
   WiFiClient *client;
 

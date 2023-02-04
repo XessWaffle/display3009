@@ -352,8 +352,7 @@ void TEST(InstructionNode *node){
 }
 
 void THROTTLE(InstructionNode *node){
-  int throttle;
-  memcpy(&throttle, node->buff, sizeof(int));
+  int throttle = node->data[0];
   if(throttle < CDAQ::BLADE_STOP_PWM)
     throttle = CDAQ::BLADE_STOP_PWM;
   
@@ -370,8 +369,7 @@ void STATE(InstructionNode *node){
 }
 
 void ANIMATION(InstructionNode *node){
-  int animation;
-  memcpy(&animation, node->buff, sizeof(int));
+  int animation = node->data[0];
   if(animation < 0)
     animation = 0;
   if(animation >= CRENDER::NUM_ANIMATIONS)
@@ -386,16 +384,14 @@ void ANIMATION(InstructionNode *node){
 }
 
 void FPS(InstructionNode *node){
-  int fps;
-  memcpy(&fps, node->buff, sizeof(int));
+  int fps = node->data[0];
   if(fps <= 0)
     fps = 30;
   currIterator->SetFrameRate(fps);
 }
 
 void MULTIPLIER(InstructionNode *node){
-  int mult;
-  memcpy(&mult, node->buff, sizeof(int));
+  int mult = node->data[0];
   double trueMult = mult/1000.0;
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
   blade.multiplier = trueMult;
@@ -403,19 +399,17 @@ void MULTIPLIER(InstructionNode *node){
 }
 
 void STAGE_FRAME(InstructionNode *node){
-  int sectors;
-  memcpy(&sectors, node->buff, sizeof(int));
+  int sectors = node->data[0];
   frameCreator.StageFrame(sectors);
 }
 
 void STAGE_ARM(InstructionNode *node){
-  int sector;
-  memcpy(&sector, node->buff, sizeof(int));
+  int sector = node->data[0];
   frameCreator.StageArm(sector);
 }
 
 void SET_LED(InstructionNode *node){
-  int led, color;
+  int led = node->data[0], color = node->data[1];
   memcpy(&led, node->buff, sizeof(int));
   memcpy(&color, node->buff + sizeof(int), sizeof(int));
   frameCreator.SetLED(led, CRGB(color));
