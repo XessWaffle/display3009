@@ -2,8 +2,6 @@
 #define BLADE_MANAGER_H
 
 #include <ESP32Servo.h>
-#include <Arduino.h>
-#include <Wire.h>
 #include "BladeFrame.h"
 
 enum SpinState{STARTING, SPINNING, STOPPING, STOPPED};
@@ -25,16 +23,12 @@ class BladeManager{
 
   private:
 
-    bool _triggerLatch = false;
-    bool _prevAcceleration = false;
-    int _zeroTrigger = 0;
-
     int _motorPin;
     int _motorWriteValue;
     int _state = SpinState::STOPPED;
     int _numLeds;
 
-    long _lastStepped, _lastTrigger;
+    long _lastStepped;
     
     double _desiredWrite;
 };

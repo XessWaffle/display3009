@@ -1,7 +1,6 @@
 #include "CommunicationHandler.h"
 
 #include "Constants.h"
-#include <Arduino.h>
 
 CommunicationHandler::CommunicationHandler(){
 
@@ -35,6 +34,7 @@ void CommunicationHandler::OnRefresh(){
   this->SendInstruction("mult", CCOMMS::MULTIPLIER);
   this->SendInstruction("stage-fr", CCOMMS::STAGE_FRAME);
   this->SendInstruction("stage-ar", CCOMMS::STAGE_ARM);
+  this->SendInstruction("copy-ar", CCOMMS::COPY_ARM);
   this->SendInstruction("led", CCOMMS::SET_LED);
   this->SendInstruction("commit-ar", CCOMMS::COMMIT_ARM);
   this->SendInstruction("commit-fr", CCOMMS::COMMIT_FRAME);
@@ -46,19 +46,13 @@ void CommunicationHandler::OnDisconnect(){
 
 void CommunicationHandler::Handle(){
   if(this->_headInst != NULL){
-
     HandlerNode *instHandler = this->GetInstructionHandler(this->_headInst->instByte);
     if(instHandler != NULL)
       (*(instHandler->handler))(this->_headInst);
 
-    xSemaphoreTake(this->_dataMutex, portMAX_DELAY);
-
     InstructionNode *remove = this->_headInst;
     this->_headInst = this->_headInst->next;
     free(remove);
-
-    xSemaphoreGive(this->_dataMutex);
-
   }
 }
 
@@ -70,37 +64,46 @@ void CommunicationHandler::Populate(){
     uint8_t byte = this->_client.read();
 
     if(_stagedInst == NULL){
+      bool standardInst = false;
+
+      if(byte == CCOMMS::REFRESH) {
+        this->OnRefresh();
+        standardInst = true;
+      } else if(byte == CCOMMS::DISCONNECT) {
+        this->OnDisconnect();
+        standardInst = true;
+      }
+
+      if(standardInst) return;
+
       _stagedInst = (InstructionNode*) malloc(sizeof(InstructionNode));
       _stagedInst->next = NULL;
       _stagedInst->client = &(this->_client);
 
-      HandlerNode *instHandler = this->GetInstructionHandler(byte);
+      this->_stagedHandler = this->GetInstructionHandler(byte);
 
-      if(instHandler != NULL){
-        _stagedInst->byteCounter = instHandler->bytes;
-        _stagedInst->instByte = byte;
+      if(this->_stagedHandler != NULL){
+        _stagedInst->byteCounter = this->_stagedHandler->bytes;
+        _stagedInst->instByte = this->_stagedHandler->instByte;
       } else {
         free(_stagedInst);
         _stagedInst = NULL;
       }
+
     } else {
-      _stagedInst->buff[_stagedInst->size++] = byte;
+      _stagedInst->buff[this->_stagedHandler->bytes - _stagedInst->byteCounter] = byte;
       _stagedInst->byteCounter--;
+    }
 
-      xSemaphoreTake(this->_dataMutex, portMAX_DELAY);
-
-      if(_stagedInst->byteCounter == 0){
-        if(this->_headInst == NULL){
-          this->_headInst = _stagedInst;
-          this->_lastInst = _stagedInst;
-        } else {
-          this->_lastInst->next = _stagedInst;
-          this->_lastInst = _stagedInst;
-          _stagedInst = NULL;
-        }
+    if(_stagedInst->byteCounter == 0){
+      if(this->_headInst == NULL){
+        this->_headInst = _stagedInst;
+        this->_lastInst = _stagedInst;
+      } else {
+        this->_lastInst->next = _stagedInst;
+        this->_lastInst = _stagedInst;
       }
-
-      xSemaphoreGive(this->_dataMutex);
+      _stagedInst = NULL;
     }
 
   }

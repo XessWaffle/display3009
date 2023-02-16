@@ -6,10 +6,10 @@
 struct InstructionNode{
   uint8_t instByte;
   union{  
-    uint8_t buff[32];
-    int data[8];
-  }
-  int size = 0, byteCounter = 0;
+    uint8_t buff[16];
+    int data[4] = {0,0,0,0};
+  };
+  int byteCounter = 0;
   WiFiClient *client;
 
   InstructionNode *next;
@@ -43,8 +43,7 @@ class CommunicationHandler{
   private:
     WiFiClient _client;
     InstructionNode *_headInst, *_lastInst, *_stagedInst = NULL;
-    HandlerNode *_head, *_last;
-    SemaphoreHandle_t _dataMutex = xSemaphoreCreateMutex();
+    HandlerNode *_head, *_last, *_stagedHandler = NULL;
 };
 
 #endif

@@ -20,6 +20,13 @@ void ArmFrame::SetLED(int led, CRGB color){
   }
 }
 
+CRGB ArmFrame::GetLED(int led){
+  if(led >= 0 && led < this->_numLeds){
+    return this->_ledFrame[led];
+  }
+  return CRGB(0);
+}
+
 void ArmFrame::Destroy(){
   free(this->_ledFrame);
 }

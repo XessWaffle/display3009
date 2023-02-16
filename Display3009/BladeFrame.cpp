@@ -27,6 +27,20 @@ void BladeFrame::OnFrameEntry(){
   this->_follower = NULL;
 }
 
+ArmFrame *BladeFrame::GetArmFrame(double theta){
+  ArmFrameNode *head = this->_root;
+
+  while(true){
+    if(head->theta <= theta)
+      return head->frame;
+    
+    if(head->next == this->_root)
+      break;
+
+    head = head->next;
+  }
+  return NULL;
+}
 
 void BladeFrame::AddArmFrame(ArmFrame* frame, double theta){
   

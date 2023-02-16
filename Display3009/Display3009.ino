@@ -12,7 +12,6 @@ struct CRGB primary[CRENDER::NUM_LEDS], follower[CRENDER::NUM_LEDS];
 struct Blade{
   double omega = 40, theta;
   double multiplier = 1.0;
-  double rezero = true;
   BladeFrame *currFrame = NULL;
 };
 
@@ -22,7 +21,7 @@ BladeFrameCreator frameCreator;
 BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
 
-TaskHandle_t DAQ_TASK, DISP_TASK, COMM_TASK;
+TaskHandle_t DAQ_TASK, DISP_TASK, FEED_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
 
 CommunicationHandler comms = CommunicationHandler();
@@ -39,6 +38,7 @@ void prepCommunications(){
   comms.SetHandler(CCOMMS::STAGE_FRAME, &STAGE_FRAME, sizeof(int));
   comms.SetHandler(CCOMMS::STAGE_ARM, &STAGE_ARM, sizeof(int));
   comms.SetHandler(CCOMMS::SET_LED, &SET_LED, 2 * sizeof(int));
+  comms.SetHandler(CCOMMS::COPY_ARM, &COPY_ARM, sizeof(int));
   comms.SetHandler(CCOMMS::COMMIT_ARM, &COMMIT_ARM, 0);
   comms.SetHandler(CCOMMS::COMMIT_FRAME, &COMMIT_FRAME, 0);
 }
@@ -170,19 +170,11 @@ void setup() {
   xTaskCreatePinnedToCore(
                     DAQ_WRAPPER, /* Task function. */
                     "Data",      /* name of task. */
-                    8192,        /* Stack size of task */
+                    16384,        /* Stack size of task */
                     NULL,        /* parameter of the task */
                     2,           /* priority of the task */
                     &DAQ_TASK,   /* Task handle to keep track of created task */
-                    0);          /* pin task to core 0 */       
-  xTaskCreatePinnedToCore(
-                    COMM_WRAPPER, /* Task function. */
-                    "Byte",      /* name of task. */
-                    8192,        /* Stack size of task */
-                    NULL,        /* parameter of the task */
-                    2,           /* priority of the task */
-                    &COMM_TASK,   /* Task handle to keep track of created task */
-                    0);          /* pin task to core 0 */                  
+                    0);          /* pin task to core 0 */
   xTaskCreatePinnedToCore(
                     DISP_WRAPPER,/* Task function. */
                     "Display",   /* name of task. */
@@ -193,9 +185,18 @@ void setup() {
                     1);          /* pin task to core 1 */
 }
 
+void FEED(void* params){
+  for(;;){
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
 void DAQ() {
   
+  comms.Populate();
   comms.Handle();
+
+  //Serial.println(hallRead());
 
   bool reachedZero = bladeManager.Step();
   bool frameChange = currIterator->Step();
@@ -204,13 +205,10 @@ void DAQ() {
 
   if(currIterator != NULL && frameChange)
     blade.currFrame = currIterator->GetFrame(); 
-
-  if(reachedZero && blade.rezero){
-    blade.theta = 0.0;
-    blade.rezero = false;
-  }
   
   xSemaphoreGive(bladeMutex);
+
+  vTaskDelay(1);
 
 }
 
@@ -221,7 +219,6 @@ void DISP(long step, bool updatePrimary) {
   blade.theta += blade.multiplier * blade.omega * step * 0.000001;
   if(blade.theta > TWO_PI) {
     blade.theta -= TWO_PI;
-    blade.rezero = true;
   }
 
   ArmFrame *frame = NULL;
@@ -240,9 +237,6 @@ void DISP(long step, bool updatePrimary) {
   }
 }
 
-void COMM(){
-  comms.Populate();
-}
 
 void DAQ_WRAPPER(void *params){
   for(;;) DAQ();
@@ -259,16 +253,12 @@ void DISP_WRAPPER(void *params){
   }
 }
 
-void COMM_WRAPPER(void* params){
-  for(;;) COMM();
-}
-
 
 void RENDER(bool refreshPrimary){
   int dataPin = refreshPrimary ? COPS::DATA_PIN_PRIMARY : COPS::DATA_PIN_FOLLOWER;
   int clockPin = refreshPrimary ? COPS::CLOCK_PIN_PRIMARY : COPS::CLOCK_PIN_FOLLOWER;
-  int regSet = refreshPrimary ? GPIO_OUT_W1TS_REG : GPIO_OUT1_W1TS_REG;
-  int regClear = refreshPrimary ? GPIO_OUT_W1TC_REG : GPIO_OUT1_W1TC_REG;
+  int regSet = GPIO_OUT_W1TS_REG;
+  int regClear = GPIO_OUT_W1TC_REG;
 
   dataPin = dataPin > 32 ? dataPin - 32 : dataPin;
   dataPin = 1 << dataPin;
@@ -406,6 +396,11 @@ void STAGE_FRAME(InstructionNode *node){
 void STAGE_ARM(InstructionNode *node){
   int sector = node->data[0];
   frameCreator.StageArm(sector);
+}
+
+void COPY_ARM(InstructionNode *node){
+  int sector = node->data[0];
+  frameCreator.CopyArm(sector);
 }
 
 void SET_LED(InstructionNode *node){

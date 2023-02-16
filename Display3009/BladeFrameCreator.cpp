@@ -27,6 +27,18 @@ bool BladeFrameCreator::SetLED(int index, struct CRGB color){
   return true;
 }
 
+bool BladeFrameCreator::CopyArm(int sector){
+  if(this->_stagedFrame == NULL || this->_stagedArm == NULL) return false;
+  double theta = (double) sector/this->_sectors * TWO_PI;
+  ArmFrame *toCopy = this->_stagedFrame->GetArmFrame(theta);
+  if(toCopy != NULL){
+    for(int i = 0; i < CRENDER::NUM_LEDS; i++)
+      this->_stagedArm->SetLED(i, toCopy->GetLED(i));
+    return true;
+  }
+  return false;
+}
+
 bool BladeFrameCreator::CommitArm(){
   this->_stagedArm = NULL;
   return true;

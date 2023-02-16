@@ -17,22 +17,16 @@ namespace Constants{
     static const int BLADE_STOP_PWM       = 1000;
     static const int BLADE_START_PWM      = 1250;
     static const int BLADE_MAX_PWM        = 1450;
-    static const double MPU_RADIUS        = 0.084;
-    static const double HPM_RADIUS        = 0.109;
 
     static const int BLADE_UPDATE_DELAY   = 50;
-
-    static const double GRAVITY           = 9.80665;
-
-    static const int SENSOR_TRIGGER_DELAY = 15;
   };
 
   namespace OPS{
-    static const int DATA_PIN_FOLLOWER  = 33;
-    static const int CLOCK_PIN_FOLLOWER = 32;
-    static const int DATA_PIN_PRIMARY   = 19;
+    static const int DATA_PIN_FOLLOWER  = 23; // VSPI
+    static const int CLOCK_PIN_FOLLOWER = 18;
+    static const int DATA_PIN_PRIMARY   = 13; // HSPI
     static const int CLOCK_PIN_PRIMARY  = 14;
-    static const int MOTOR_PIN          = 13;
+    static const int MOTOR_PIN          = 25;
   };
 
   namespace RENDER{
@@ -47,7 +41,7 @@ namespace Constants{
     static const char* SSID            = "3009 Xess";
     static const char* PWD             = "dingd0ngditch";
     static const int PORT              = 80;
-    static const char* XESSAMD         = "192.168.137.71";
+    static const char* XESSAMD         = "192.168.137.202";
     static const uint8_t MESSAGE_PAUSE = 0xFF;
     static const uint8_t REFRESH       = 0xFF;
     static const uint8_t DISCONNECT    = 0xFE;
@@ -62,9 +56,10 @@ namespace Constants{
     static const uint8_t STAGE_FRAME   = createWriteInstruction(0x09);
     static const uint8_t STAGE_ARM     = createWriteInstruction(0x0A);
     static const uint8_t SET_LED       = createWriteInstruction(0x0B);
+    static const uint8_t COPY_ARM      = createWriteInstruction(0x0E);
     static const uint8_t COMMIT_ARM    = createReadInstruction(0x0C);
     static const uint8_t COMMIT_FRAME  = createReadInstruction(0x0D);
-    static const uint8_t NUM_INST      = 13;
+    static const uint8_t NUM_INST      = 14;
     static const uint8_t ID            = 1;
 
   };
