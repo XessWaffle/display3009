@@ -30,8 +30,10 @@ namespace Constants{
   };
 
   namespace RENDER{
-    static const int NUM_LEDS       = 72;
-    static const int NUM_ANIMATIONS = 7;
+    static const int NUM_LEDS          = 72;
+    static const int NUM_ANIMATIONS    = 7;
+
+    static const int BUFFER_SIZE       = 297;
   };
 
   namespace COMMS{

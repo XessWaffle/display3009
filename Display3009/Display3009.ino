@@ -1,5 +1,6 @@
 #include <FastLED.h>
 #include <ESP32Servo.h>
+#include <SPI.h>
 #include "Constants.h"
 #include "BladeManager.h" 
 #include "BladeFrameIterator.h"
@@ -8,11 +9,14 @@
 
 // Define the array of leds
 struct CRGB primary[CRENDER::NUM_LEDS], follower[CRENDER::NUM_LEDS];
+uint8_t renderBuffer[CRENDER::BUFFER_SIZE];
 
 struct Blade{
   double omega = 40, theta;
   double multiplier = 1.0;
   BladeFrame *currFrame = NULL;
+  
+  uint8_t brightness = 1;
 };
 
 volatile Blade blade;
@@ -21,7 +25,9 @@ BladeFrameCreator frameCreator;
 BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
 
-TaskHandle_t DAQ_TASK, DISP_TASK, FEED_TASK;
+SPIClass *primarySPI, *followerSPI;
+
+TaskHandle_t DAQ_TASK, DISP_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
 
 CommunicationHandler comms = CommunicationHandler();
@@ -142,13 +148,35 @@ void prepAnimations(){
 
 }
 
+void prepRenderingUtils(){
+
+  primarySPI = new SPIClass(HSPI);
+  followerSPI = new SPIClass(VSPI);
+
+  pinMode(primarySPI->pinSS(), OUTPUT); // VSPI SS
+  pinMode(followerSPI->pinSS(), OUTPUT); // HSPI SS
+
+  primarySPI.begin();
+  followerSPI.begin();
+
+  renderBuffer[0] = 0;
+  renderBuffer[1] = 0;
+  renderBuffer[2] = 0;
+  renderBuffer[3] = 0;
+  renderBuffer[CRENDER::BUFFER_SIZE - 1] = 0;
+  renderBuffer[CRENDER::BUFFER_SIZE - 2] = 0;
+  renderBuffer[CRENDER::BUFFER_SIZE - 3] = 0;
+  renderBuffer[CRENDER::BUFFER_SIZE - 4] = 0;
+  renderBuffer[CRENDER::BUFFER_SIZE - 5] = 0;
+}
+
 
 void setup() {
 
   Serial.begin(115200);
 
-  FastLED.addLeds<SK9822, COPS::DATA_PIN_PRIMARY, COPS::CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, CRENDER::NUM_LEDS);  // BGR ordering is typical
-  FastLED.addLeds<SK9822, COPS::DATA_PIN_FOLLOWER, COPS::CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, CRENDER::NUM_LEDS);  // BGR ordering is typical
+  //FastLED.addLeds<SK9822, COPS::DATA_PIN_PRIMARY, COPS::CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, CRENDER::NUM_LEDS);  // BGR ordering is typical
+  //FastLED.addLeds<SK9822, COPS::DATA_PIN_FOLLOWER, COPS::CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, CRENDER::NUM_LEDS);  // BGR ordering is typical
   //FastLED.setMaxRefreshRate(0);
 
   WiFi.begin(CCOMMS::SSID, CCOMMS::PWD);
@@ -156,6 +184,8 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
       delay(500);
   }
+
+  prepBuffer();
 
   prepCommunications();
   
@@ -185,12 +215,6 @@ void setup() {
                     1);          /* pin task to core 1 */
 }
 
-void FEED(void* params){
-  for(;;){
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
-}
-
 void DAQ() {
   
   comms.Populate();
@@ -203,8 +227,10 @@ void DAQ() {
   
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
 
-  if(currIterator != NULL && frameChange)
+  if(currIterator != NULL && frameChange){
     blade.currFrame = currIterator->GetFrame(); 
+    blade.brightness = 1;
+  }
   
   xSemaphoreGive(bladeMutex);
 
@@ -214,12 +240,20 @@ void DAQ() {
 
 void DISP(long step, bool updatePrimary) {
  
+  int brightness = 0;
+
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
 
   blade.theta += blade.multiplier * blade.omega * step * 0.000001;
   if(blade.theta > TWO_PI) {
     blade.theta -= TWO_PI;
   }
+
+  if(blade.brighness < 31 && updatePrimary){
+    blade.brighness++;
+  }
+
+  brightness = blade.brightness;
 
   ArmFrame *frame = NULL;
   bool frameUpdated = false;
@@ -233,10 +267,10 @@ void DISP(long step, bool updatePrimary) {
 
   if(frame != NULL && frameUpdated){
     frame->Trigger(updatePrimary ? primary : follower);
-    RENDER(updatePrimary);
+    RENDER_SPI(updatePrimary, brightness);
+    //RENDER_BITBANG(updatePrimary, brightness);
   }
 }
-
 
 void DAQ_WRAPPER(void *params){
   for(;;) DAQ();
@@ -253,8 +287,27 @@ void DISP_WRAPPER(void *params){
   }
 }
 
+void RENDER_SPI(bool refreshPrimary, uint8_t brightness){
 
-void RENDER(bool refreshPrimary){
+  SPIClass* arm = refreshPrimary ? primarySPI : followerSPI;
+  CRGB* push = refreshPrimary ? primary : follower;
+
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++) {
+
+    int bufferIndex = 4 * i + 4;
+
+    renderBuffer[bufferIndex] = brightness;
+    renderBuffer[bufferIndex + 1] = push[i].blue;
+    renderBuffer[bufferIndex + 2] = push[i].green;
+    renderBuffer[bufferIndex + 3] = push[i].red;
+
+  }
+
+  arm->writeBytes(renderBuffer, CRENDER::BUFFER_SIZE);
+
+}
+
+void RENDER_BITBANG(bool refreshPrimary, uint8_t brightness){
   int dataPin = refreshPrimary ? COPS::DATA_PIN_PRIMARY : COPS::DATA_PIN_FOLLOWER;
   int clockPin = refreshPrimary ? COPS::CLOCK_PIN_PRIMARY : COPS::CLOCK_PIN_FOLLOWER;
   int regSet = GPIO_OUT_W1TS_REG;
@@ -268,14 +321,14 @@ void RENDER(bool refreshPrimary){
   REG_WRITE(regClear, clockPin);
   REG_WRITE(regClear, dataPin);
 
-  // Start Frame
+  // Start Frame (4 bytes)
   REG_WRITE(regClear, dataPin);
   for(int i = 0; i < 32; i++){
     REG_WRITE(regSet, clockPin);
     REG_WRITE(regClear, clockPin);
   }
 
-  // LED Frames
+  // LED Frames (72 * 4 bytes)
   for(int i = 0; i < CRENDER::NUM_LEDS; i++) {
 
     CRGB push = refreshPrimary ? primary[i] : follower[i];
@@ -283,6 +336,8 @@ void RENDER(bool refreshPrimary){
     // LED Frame Brightness
     REG_WRITE(regSet, dataPin);
     for(int j = 0; j < 8; j++){
+      if(j >= 3)
+        REG_WRITE((1 << (j - 3) & brightness) > 0 ? regSet : regClear, dataPin);
       REG_WRITE(regSet, clockPin);
       REG_WRITE(regClear, clockPin);
     }
@@ -321,7 +376,7 @@ void RENDER(bool refreshPrimary){
     }
   }
 
-  // End Frame
+  // End Frame (5 bytes)
   REG_WRITE(regClear, dataPin);
   for(int i = 0; i < 36; i++){
     REG_WRITE(regSet, clockPin);
