@@ -3,6 +3,12 @@
 
 #include <FastLED.h>
 
+struct CRGBNode{
+  struct CRGB color;
+  int led;
+  CRGBNode *next, *prev;
+}
+
 class ArmFrame{
   public:
 
@@ -10,14 +16,13 @@ class ArmFrame{
     ArmFrame(int numLeds);
 
     void SetLED(int led, struct CRGB color);
-    CRGB GetLED(int led);
     void Destroy();
 
     void Trigger(struct CRGB *mod);
 
   private:
-    struct CRGB *_ledFrame;
     int _numLeds;
+    CRGBNode *_root;
 };
 
 
