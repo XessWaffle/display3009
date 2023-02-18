@@ -4,6 +4,7 @@
 #define COPS Constants::OPS
 #define CRENDER Constants::RENDER
 #define CCOMMS Constants::COMMS
+#define CVAL Constants::VALUE
 
 #include <stdint.h>
 
@@ -65,4 +66,8 @@ namespace Constants{
     static const uint8_t ID            = 1;
 
   };
+
+  namespace VALUE{
+    static const int MHZ = 1000000;
+  }
 };

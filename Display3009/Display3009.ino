@@ -156,8 +156,8 @@ void prepRenderingUtils(){
   pinMode(primarySPI->pinSS(), OUTPUT); // VSPI SS
   pinMode(followerSPI->pinSS(), OUTPUT); // HSPI SS
 
-  primarySPI.begin();
-  followerSPI.begin();
+  primarySPI->begin();
+  followerSPI->begin();
 
   renderBuffer[0] = 0;
   renderBuffer[1] = 0;
@@ -185,7 +185,7 @@ void setup() {
       delay(500);
   }
 
-  prepBuffer();
+  prepRenderingUtils();
 
   prepCommunications();
   
@@ -249,8 +249,8 @@ void DISP(long step, bool updatePrimary) {
     blade.theta -= TWO_PI;
   }
 
-  if(blade.brighness < 31 && updatePrimary){
-    blade.brighness++;
+  if(blade.brightness < 31 && updatePrimary){
+    blade.brightness++;
   }
 
   brightness = blade.brightness;
@@ -267,8 +267,7 @@ void DISP(long step, bool updatePrimary) {
 
   if(frame != NULL && frameUpdated){
     frame->Trigger(updatePrimary ? primary : follower);
-    RENDER_SPI(updatePrimary, brightness);
-    //RENDER_BITBANG(updatePrimary, brightness);
+    RENDER(updatePrimary, brightness);
   }
 }
 
@@ -287,7 +286,7 @@ void DISP_WRAPPER(void *params){
   }
 }
 
-void RENDER_SPI(bool refreshPrimary, uint8_t brightness){
+void RENDER(bool refreshPrimary, uint8_t brightness){
 
   SPIClass* arm = refreshPrimary ? primarySPI : followerSPI;
   CRGB* push = refreshPrimary ? primary : follower;
@@ -303,85 +302,11 @@ void RENDER_SPI(bool refreshPrimary, uint8_t brightness){
 
   }
 
-  arm->writeBytes(renderBuffer, CRENDER::BUFFER_SIZE);
-
-}
-
-void RENDER_BITBANG(bool refreshPrimary, uint8_t brightness){
-  int dataPin = refreshPrimary ? COPS::DATA_PIN_PRIMARY : COPS::DATA_PIN_FOLLOWER;
-  int clockPin = refreshPrimary ? COPS::CLOCK_PIN_PRIMARY : COPS::CLOCK_PIN_FOLLOWER;
-  int regSet = GPIO_OUT_W1TS_REG;
-  int regClear = GPIO_OUT_W1TC_REG;
-
-  dataPin = dataPin > 32 ? dataPin - 32 : dataPin;
-  dataPin = 1 << dataPin;
-  clockPin = clockPin > 32 ? clockPin - 32 : clockPin;
-  clockPin = 1 << clockPin;
-
-  REG_WRITE(regClear, clockPin);
-  REG_WRITE(regClear, dataPin);
-
-  // Start Frame (4 bytes)
-  REG_WRITE(regClear, dataPin);
-  for(int i = 0; i < 32; i++){
-    REG_WRITE(regSet, clockPin);
-    REG_WRITE(regClear, clockPin);
+  arm->beginTransaction(SPISettings(70 * CVAL::MHZ, MSBFIRST, SPI_MODE0));
+  {
+    arm->transfer(renderBuffer, CRENDER::BUFFER_SIZE);
   }
-
-  // LED Frames (72 * 4 bytes)
-  for(int i = 0; i < CRENDER::NUM_LEDS; i++) {
-
-    CRGB push = refreshPrimary ? primary[i] : follower[i];
-
-    // LED Frame Brightness
-    REG_WRITE(regSet, dataPin);
-    for(int j = 0; j < 8; j++){
-      if(j >= 3)
-        REG_WRITE((1 << (j - 3) & brightness) > 0 ? regSet : regClear, dataPin);
-      REG_WRITE(regSet, clockPin);
-      REG_WRITE(regClear, clockPin);
-    }
-
-    int j = 1;
-    // LED Blue
-    while(true){
-      if(j >= 1 << 8) break;
-      bool set = (push.blue & j) > 0;
-      REG_WRITE(set ? regSet : regClear, dataPin);
-      REG_WRITE(regSet, clockPin);
-      REG_WRITE(regClear, clockPin);
-      j = j << 1;
-    }
-    
-    j = 1;
-    // LED Green
-    while(true){
-      if(j >= 1 << 8) break;
-      bool set = (push.green & j) > 0;
-      REG_WRITE(set ? regSet : regClear, dataPin);
-      REG_WRITE(regSet, clockPin);
-      REG_WRITE(regClear, clockPin);
-      j = j << 1;
-    }
-    
-    j = 1;
-    // LED Red 
-    while(true){
-      if(j >= 1 << 8) break;
-      bool set = (push.red & j) > 0;
-      REG_WRITE(set ? regSet : regClear, dataPin);
-      REG_WRITE(regSet, clockPin);
-      REG_WRITE(regClear, clockPin);
-      j = j << 1;
-    }
-  }
-
-  // End Frame (5 bytes)
-  REG_WRITE(regClear, dataPin);
-  for(int i = 0; i < 36; i++){
-    REG_WRITE(regSet, clockPin);
-    REG_WRITE(regClear, clockPin);
-  }
+  arm->endTransaction();
 }
 
 void START(InstructionNode *node){
