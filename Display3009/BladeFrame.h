@@ -21,8 +21,6 @@ class BladeFrame{
 
     void OnFrameEntry();
 
-    ArmFrame *GetArmFrame(double theta);
-
     void AddArmFrame(ArmFrame* frame, double theta);
     bool UpdatePrimaryFrame(double theta);
     bool UpdateFollowerFrame(double theta);

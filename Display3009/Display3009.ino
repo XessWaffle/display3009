@@ -7,10 +7,7 @@
 #include "BladeFrameCreator.h"
 #include "CommunicationHandler.h"
 
-// Define the array of leds
-struct CRGB primary[CRENDER::NUM_LEDS], follower[CRENDER::NUM_LEDS];
-uint8_t renderBuffer[CRENDER::BUFFER_SIZE];
-
+// Contains all volatile variables
 struct Blade{
   double omega = 40, theta;
   double multiplier = 1.0;
@@ -19,13 +16,16 @@ struct Blade{
   uint8_t brightness = 1;
 };
 
+// Define the array of leds
+struct CRGB primary[CRENDER::NUM_LEDS], follower[CRENDER::NUM_LEDS];
+uint8_t renderBuffer[CRENDER::BUFFER_SIZE];
+SPIClass *primarySPI, *followerSPI;
+
 volatile Blade blade;
 BladeManager bladeManager;
 BladeFrameCreator frameCreator;
 BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
-
-SPIClass *primarySPI, *followerSPI;
 
 TaskHandle_t DAQ_TASK, DISP_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
@@ -44,7 +44,6 @@ void prepCommunications(){
   comms.SetHandler(CCOMMS::STAGE_FRAME, &STAGE_FRAME, sizeof(int));
   comms.SetHandler(CCOMMS::STAGE_ARM, &STAGE_ARM, sizeof(int));
   comms.SetHandler(CCOMMS::SET_LED, &SET_LED, 2 * sizeof(int));
-  comms.SetHandler(CCOMMS::COPY_ARM, &COPY_ARM, sizeof(int));
   comms.SetHandler(CCOMMS::COMMIT_ARM, &COMMIT_ARM, 0);
   comms.SetHandler(CCOMMS::COMMIT_FRAME, &COMMIT_FRAME, 0);
 }
@@ -376,11 +375,6 @@ void STAGE_FRAME(InstructionNode *node){
 void STAGE_ARM(InstructionNode *node){
   int sector = node->data[0];
   frameCreator.StageArm(sector);
-}
-
-void COPY_ARM(InstructionNode *node){
-  int sector = node->data[0];
-  frameCreator.CopyArm(sector);
 }
 
 void SET_LED(InstructionNode *node){

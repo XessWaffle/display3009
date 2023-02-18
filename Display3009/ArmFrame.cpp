@@ -7,34 +7,70 @@ ArmFrame::ArmFrame(){
 
 ArmFrame::ArmFrame(int numLeds){
   this->_numLeds = numLeds;
-  this->_ledFrame = (CRGB*) malloc(numLeds * sizeof(CRGB));
-
-  for(int i = 0; i < numLeds; i++){
-    this->_ledFrame[i] = CRGB::Black;
-  }
 }
 
 void ArmFrame::SetLED(int led, CRGB color){
   if(led >= 0 && led < this->_numLeds){
-    this->_ledFrame[led] = color;
-  }
-}
+    struct CRGBNode* node = (struct CRGBNode*) malloc(sizeof(struct CRGBNode)), *head = this->_root;
+    node->color = color;
+    node->led = led;
+    node->next = NULL;
+    node->prev = NULL;
 
-CRGB ArmFrame::GetLED(int led){
-  if(led >= 0 && led < this->_numLeds){
-    return this->_ledFrame[led];
+    bool inserted = false;
+
+    if(head == NULL){
+      inserted = true;
+      this->_root = node;
+    } else {
+      while(head != NULL){
+        if(head->led == led){
+          inserted = true;
+          free(node);
+          head->color = color;
+        }
+
+        if(head->led > led){
+          inserted = true;
+          struct CRGBNode *prev = head->prev;
+          if(prev != NULL) prev->next = node;
+          node->next = head;
+          node->prev = prev;
+          head->prev = node;
+        }
+
+        if(inserted)
+          break;
+        
+        head = head->next;
+      }
+    }
+
+    if(!inserted){
+      head->next = node;
+      node->prev = head;
+    }
+
   }
-  return CRGB(0);
 }
 
 void ArmFrame::Destroy(){
-  free(this->_ledFrame);
+
+  if(this->_root == NULL) return;
+
+  do{
+    CRGBNode *remove = this->_root;
+    free(remove);
+    this->_root = this->_root->next;
+  } while(this->_root != NULL);
+
 }
 
 void ArmFrame::Trigger(struct CRGB *mod){
+  CRGBNode *head = this->_root;
 
-  for(int i = 0; i < this->_numLeds; i++){ 
-    mod[i] = this->_ledFrame[i];   
+  while(head != NULL){
+    mod[head->led] = head->color;
+    head = head->next;
   }
-
 }
