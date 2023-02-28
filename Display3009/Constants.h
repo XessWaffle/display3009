@@ -20,6 +20,13 @@ namespace Constants{
     static const int BLADE_MAX_PWM        = 1450;
 
     static const int BLADE_UPDATE_DELAY   = 50;
+
+    static const int HALL_ENTRY_THRESHOLD = -20;
+    static const int HALL_EXIT_THRESHOLD  = 0;
+    static const float HALL_SWEEP         = 0.3246312;
+    static const float HALL_ANGLE         = 1.3090006122;
+
+    static const int FILTER_NODES         = 6;
   };
 
   namespace OPS{
@@ -59,14 +66,16 @@ namespace Constants{
     static const uint8_t STAGE_FRAME   = createWriteInstruction(0x09);
     static const uint8_t STAGE_ARM     = createWriteInstruction(0x0A);
     static const uint8_t SET_LED       = createWriteInstruction(0x0B);
-    static const uint8_t COMMIT_ARM    = createReadInstruction(0x0C);
-    static const uint8_t COMMIT_FRAME  = createReadInstruction(0x0D);
-    static const uint8_t NUM_INST      = 13;
+    static const uint8_t SET_LEDS      = createWriteInstruction(0x0E);
+    static const uint8_t COMMIT_ARM    = createWriteInstruction(0x0C);
+    static const uint8_t COMMIT_FRAME  = createWriteInstruction(0x0D);
+    static const uint8_t NUM_INST      = 14;
     static const uint8_t ID            = 1;
 
   };
 
   namespace VALUE{
-    static const int MHZ = 1000000;
+    static const int MHZ      = 1000000;
+    static const float MICROS = 0.000001;
   }
 };

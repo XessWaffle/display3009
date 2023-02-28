@@ -35,6 +35,7 @@ void CommunicationHandler::OnRefresh(){
   this->SendInstruction("stage-fr", CCOMMS::STAGE_FRAME);
   this->SendInstruction("stage-ar", CCOMMS::STAGE_ARM);
   this->SendInstruction("led", CCOMMS::SET_LED);
+  this->SendInstruction("leds", CCOMMS::SET_LEDS);
   this->SendInstruction("commit-ar", CCOMMS::COMMIT_ARM);
   this->SendInstruction("commit-fr", CCOMMS::COMMIT_FRAME);
 }

@@ -9,7 +9,8 @@ class BladeFrameCreator{
 
     bool StageFrame(int sectors);
     bool StageArm(int sector);
-    bool SetLED(int index, struct CRGB color);
+    bool SetLED(int led, struct CRGB color);
+    bool SetLEDs(int startIndex, int endIndex, struct CRGB color);
     bool CommitArm();
     BladeFrame *CommitFrame();
 

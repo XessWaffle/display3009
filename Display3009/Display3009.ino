@@ -44,6 +44,7 @@ void prepCommunications(){
   comms.SetHandler(CCOMMS::STAGE_FRAME, &STAGE_FRAME, sizeof(int));
   comms.SetHandler(CCOMMS::STAGE_ARM, &STAGE_ARM, sizeof(int));
   comms.SetHandler(CCOMMS::SET_LED, &SET_LED, 2 * sizeof(int));
+  comms.SetHandler(CCOMMS::SET_LEDS, &SET_LEDS, 3 * sizeof(int));
   comms.SetHandler(CCOMMS::COMMIT_ARM, &COMMIT_ARM, 0);
   comms.SetHandler(CCOMMS::COMMIT_FRAME, &COMMIT_FRAME, 0);
 }
@@ -174,8 +175,8 @@ void setup() {
 
   Serial.begin(115200);
 
-  //FastLED.addLeds<SK9822, COPS::DATA_PIN_PRIMARY, COPS::CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, CRENDER::NUM_LEDS);  // BGR ordering is typical
-  //FastLED.addLeds<SK9822, COPS::DATA_PIN_FOLLOWER, COPS::CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, CRENDER::NUM_LEDS);  // BGR ordering is typical
+  FastLED.addLeds<SK9822, COPS::DATA_PIN_PRIMARY, COPS::CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, CRENDER::NUM_LEDS);  // BGR ordering is typical
+  FastLED.addLeds<SK9822, COPS::DATA_PIN_FOLLOWER, COPS::CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, CRENDER::NUM_LEDS);  // BGR ordering is typical
   //FastLED.setMaxRefreshRate(0);
 
   WiFi.begin(CCOMMS::SSID, CCOMMS::PWD);
@@ -195,6 +196,12 @@ void setup() {
 
   currIterator = &(frameIterator[0]);
   blade.currFrame = currIterator->GetFrame();
+
+  for(int i = 50; i < CRENDER::NUM_LEDS; i += 2){
+    primary[i] = CRGB::Red;
+    follower[i] = CRGB::Red;
+  }
+
 
   xTaskCreatePinnedToCore(
                     DAQ_WRAPPER, /* Task function. */
@@ -219,9 +226,7 @@ void DAQ() {
   comms.Populate();
   comms.Handle();
 
-  //Serial.println(hallRead());
-
-  bool reachedZero = bladeManager.Step();
+  BladeData *data = bladeManager.Step();
   bool frameChange = currIterator->Step();
   
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
@@ -230,7 +235,11 @@ void DAQ() {
     blade.currFrame = currIterator->GetFrame(); 
     blade.brightness = 1;
   }
-  
+
+  if(data->trigger){
+    blade.theta = CDAQ::HALL_ANGLE;
+    data->trigger = false;
+  }
   xSemaphoreGive(bladeMutex);
 
   vTaskDelay(1);
@@ -243,7 +252,7 @@ void DISP(long step, bool updatePrimary) {
 
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
 
-  blade.theta += blade.multiplier * blade.omega * step * 0.000001;
+  blade.theta += blade.multiplier * blade.omega * step * CVAL::MICROS;
   if(blade.theta > TWO_PI) {
     blade.theta -= TWO_PI;
   }
@@ -264,10 +273,10 @@ void DISP(long step, bool updatePrimary) {
 
   xSemaphoreGive(bladeMutex);
 
-  if(frame != NULL && frameUpdated){
+  if(frame != NULL && frameUpdated)
     frame->Trigger(updatePrimary ? primary : follower);
-    RENDER(updatePrimary, brightness);
-  }
+  
+  RENDER(updatePrimary, brightness);
 }
 
 void DAQ_WRAPPER(void *params){
@@ -301,7 +310,7 @@ void RENDER(bool refreshPrimary, uint8_t brightness){
 
   }
 
-  arm->beginTransaction(SPISettings(70 * CVAL::MHZ, MSBFIRST, SPI_MODE0));
+  arm->beginTransaction(SPISettings(60 * CVAL::MHZ, MSBFIRST, SPI_MODE0));
   {
     arm->transfer(renderBuffer, CRENDER::BUFFER_SIZE);
   }
@@ -379,14 +388,16 @@ void STAGE_ARM(InstructionNode *node){
 
 void SET_LED(InstructionNode *node){
   int led = node->data[0], color = node->data[1];
-  memcpy(&led, node->buff, sizeof(int));
-  memcpy(&color, node->buff + sizeof(int), sizeof(int));
   frameCreator.SetLED(led, CRGB(color));
+}
+
+void SET_LEDS(InstructionNode *node){
+  int startLed = node->data[0], endLed = node->data[1], color = node->data[2];
+  frameCreator.SetLEDs(startLed, endLed, CRGB(color));
 }
 
 void COMMIT_ARM(InstructionNode *node){
   frameCreator.CommitArm();
-  node->client->print("1\r");
 }
 
 void COMMIT_FRAME(InstructionNode *node){
@@ -396,8 +407,6 @@ void COMMIT_FRAME(InstructionNode *node){
   frameIterator[CRENDER::NUM_ANIMATIONS - 1].AddFrame(committed);
 
   xSemaphoreGive(bladeMutex);  
-  
-  node->client->print("1\r");
 }
 
 void loop(){

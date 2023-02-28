@@ -21,9 +21,17 @@ bool BladeFrameCreator::StageArm(int sector){
   return true;
 }
 
-bool BladeFrameCreator::SetLED(int index, struct CRGB color){
+bool BladeFrameCreator::SetLED(int led, struct CRGB color){
   if(this->_stagedArm == NULL) return false;
-  this->_stagedArm->SetLED(index, color);
+  this->_stagedArm->SetLED(led, color);
+  return true;
+}
+
+bool BladeFrameCreator::SetLEDs(int startIndex, int endIndex, struct CRGB color){
+  if(this->_stagedArm == NULL) return false;
+  for(int i = startIndex; i < endIndex; i++){
+    this->_stagedArm->SetLED(i, color);
+  }
   return true;
 }
 

@@ -6,6 +6,11 @@
 
 enum SpinState{STARTING, SPINNING, STOPPING, STOPPED};
 
+struct BladeData{
+  float omega;
+  bool trigger;
+};
+
 class BladeManager{
   public:
     BladeManager();
@@ -19,14 +24,27 @@ class BladeManager{
     // Blade API
     void SetTarget(int write);
 
-    bool Step();
+    BladeData *Step();
 
   private:
+    struct RingNode{
+      int data = 0;
+      RingNode *next, *prev;
+    };
+
+  private:
+
+    BladeData *_data;
+    RingNode *_hallFilter;
+    int _hallFilterSum = 0;
 
     int _motorPin;
     int _motorWriteValue;
     int _state = SpinState::STOPPED;
     int _numLeds;
+
+    uint8_t _triggerState = 0;
+    long _triggerStart = 0;
 
     long _lastStepped;
     

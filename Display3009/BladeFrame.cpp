@@ -39,6 +39,7 @@ void BladeFrame::AddArmFrame(ArmFrame* frame, double theta){
 
   if(head == NULL){
     this->_root = next;
+    
     next->next = next;
     next->prev = next;
   } else {
