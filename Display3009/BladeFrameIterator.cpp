@@ -106,7 +106,7 @@ bool BladeFrameIterator::Step(){
         this->_frameSet = this->_frameDisplay;
 
         this->_frameSet->prev = NULL;
-        
+        remove->frame->Mark();
         free(remove);
         this->_frames--;
       }

@@ -7,17 +7,8 @@ BladeFrameCreator::BladeFrameCreator(FrameDataAllocator *dataAllocator){
 }
 
 bool BladeFrameCreator::StageFrame(int sectors){
-  if(this->_sectors != sectors){
-    this->_sectors = sectors;
-
-    if(_stagedFrame != NULL)
-      this->_allocator->Destroy(_stagedFrame);
-
-    _stagedFrame = this->_allocator->CreateBladeFrame();
-  } else {
-    _stagedFrame->Clear();
-  }
-
+  if(this->_stagedFrame != NULL) return false;
+  _stagedFrame = this->_allocator->CreateBladeFrame();
   return true;
 }
 
@@ -50,5 +41,7 @@ bool BladeFrameCreator::CommitArm(){
 }
 
 BladeFrame *BladeFrameCreator::CommitFrame(){
-  return this->_stagedFrame;
+  BladeFrame *staged = this->_stagedFrame;
+  this->_stagedFrame = NULL;
+  return staged;
 }
