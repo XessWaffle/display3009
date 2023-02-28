@@ -3,20 +3,24 @@
 
 #include <FastLED.h>
 
-class ArmFrame{
+class ArmFrame : Destructible{
+
   public:
 
     ArmFrame();
     ArmFrame(int numLeds);
 
     void SetLED(int led, struct CRGB color);
+    
     void Destroy();
+    void Reset();
 
     void Trigger(struct CRGB *mod);
 
   private:
     int _numLeds;
     struct CRGB *_leds;
+
 };
 
 

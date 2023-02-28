@@ -5,6 +5,7 @@
 #include "BladeManager.h" 
 #include "BladeFrameIterator.h"
 #include "BladeFrameCreator.h"
+#include "FrameDataAllocator.h"
 #include "CommunicationHandler.h"
 
 // Contains all volatile variables
@@ -26,6 +27,8 @@ BladeManager bladeManager;
 BladeFrameCreator frameCreator;
 BladeFrameIterator frameIterator[CRENDER::NUM_ANIMATIONS];
 BladeFrameIterator *currIterator; 
+
+FrameDataAllocator dataAllocator;
 
 TaskHandle_t DAQ_TASK, DISP_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
@@ -51,8 +54,8 @@ void prepCommunications(){
 
 void prepAnimations(){
   frameIterator[0] = BladeFrameIterator();
-  BladeFrame *zero = new BladeFrame();
-  ArmFrame *pre = new ArmFrame(CRENDER::NUM_LEDS), *black = new ArmFrame(CRENDER::NUM_LEDS);
+  BladeFrame *zero = dataAllocator.CreateBladeFrame();
+  ArmFrame *pre = dataAllocator.CreateArmFrame(), *black = dataAllocator.CreateArmFrame();
   for(int i = 50; i < CRENDER::NUM_LEDS; i++){
     pre->SetLED(i, CRGB::Red);
   }
@@ -63,7 +66,7 @@ void prepAnimations(){
   frameIterator[0].AddFrame(zero);
 
   frameIterator[1] = BladeFrameIterator();
-  ArmFrame *orange = new ArmFrame(CRENDER::NUM_LEDS), *red = new ArmFrame(CRENDER::NUM_LEDS);
+  ArmFrame *orange = dataAllocator.CreateArmFrame(), *red = dataAllocator.CreateArmFrame();
   for(int i = 0; i < CRENDER::NUM_LEDS; i++){
     if(i > 50){
       orange->SetLED(i, CRGB::Orange);
@@ -72,7 +75,7 @@ void prepAnimations(){
   }
 
   for(int i = 0; i < 40; i++){
-    BladeFrame *f1 = new BladeFrame();
+    BladeFrame *f1 = dataAllocator.CreateBladeFrame();
     if(i != 0)
       f1->AddArmFrame(red, 0.0);
     f1->AddArmFrame(orange, i/40.0 * TWO_PI);
@@ -81,13 +84,13 @@ void prepAnimations(){
   }
 
   frameIterator[2] = BladeFrameIterator();
-  ArmFrame *purple = new ArmFrame(CRENDER::NUM_LEDS);
+  ArmFrame *purple = dataAllocator.CreateArmFrame();
   for(int i = 0; i < CRENDER::NUM_LEDS; i+=3){
     purple->SetLED(i, CRGB(255, 0, 255));
   }
 
   for(int i = 0; i < 20; i++){
-    BladeFrame *f1 = new BladeFrame();
+    BladeFrame *f1 = dataAllocator.CreateBladeFrame();
     for(int j = 0; j < 3; j++){
       f1->AddArmFrame(purple, j * TWO_PI/3.0);
       f1->AddArmFrame(black, j * TWO_PI/3.0 + i * TWO_PI/60.0 + 0.01);
@@ -97,15 +100,15 @@ void prepAnimations(){
 
   frameIterator[3] = BladeFrameIterator(BladeFrameIterator::REWIND);
   for(int i = 0; i < CRENDER::NUM_LEDS; i++){
-    ArmFrame* a1 = new ArmFrame(CRENDER::NUM_LEDS);
-    BladeFrame *f1 = new BladeFrame();
+    ArmFrame* a1 = dataAllocator.CreateArmFrame();
+    BladeFrame *f1 = dataAllocator.CreateBladeFrame();
     a1->SetLED(i, CRGB::Turquoise);
     f1->AddArmFrame(a1, 0.0);
     frameIterator[3].AddFrame(f1);
   }
 
   frameIterator[4] = BladeFrameIterator(BladeFrameIterator::REWIND);
-  ArmFrame *white = new ArmFrame(CRENDER::NUM_LEDS), *redFull = new ArmFrame(CRENDER::NUM_LEDS), *greenFull = new ArmFrame(CRENDER::NUM_LEDS), *blueFull = new ArmFrame(CRENDER::NUM_LEDS);
+  ArmFrame *white = dataAllocator.CreateArmFrame(), *redFull = dataAllocator.CreateArmFrame(), *greenFull = dataAllocator.CreateArmFrame(), *blueFull = dataAllocator.CreateArmFrame();
   for(int i = 0; i < CRENDER::NUM_LEDS; i++){
     redFull->SetLED(i, CRGB::Red);
     greenFull->SetLED(i, CRGB(0, 255, 0));
@@ -114,7 +117,7 @@ void prepAnimations(){
   }
 
   for(int i = 1; i <= 20; i++){
-    BladeFrame *f1 = new BladeFrame();
+    BladeFrame *f1 = dataAllocator.CreateBladeFrame();
     
     double div = TWO_PI/i;
     for(int j = 0; j < i; j++){
@@ -125,18 +128,18 @@ void prepAnimations(){
     frameIterator[4].AddFrame(f1);
   }
 
-  BladeFrame *f1 = new BladeFrame();
+  BladeFrame *f1 = dataAllocator.CreateBladeFrame();
   f1->AddArmFrame(white, 0.0);
   frameIterator[4].AddFrame(f1);
 
   frameIterator[5] = BladeFrameIterator();
-  ArmFrame *test = new ArmFrame(CRENDER::NUM_LEDS);
+  ArmFrame *test = dataAllocator.CreateArmFrame();
   for(int i = 0; i <= CRENDER::NUM_LEDS; i++){
     if(i % 5 == 0)
       test->SetLED(i, CRGB::Gold);
   }
 
-  f1 = new BladeFrame();
+  f1 = dataAllocator.CreateBladeFrame();
   f1->AddArmFrame(pre, 0.0);
   for(int i = 1; i < 100; i++){
     f1->AddArmFrame(i%2 == 0 ? test : black, i * TWO_PI/100);
@@ -144,7 +147,7 @@ void prepAnimations(){
   frameIterator[5].AddFrame(f1);
 
   frameIterator[6] = BladeFrameIterator(BladeFrameIterator::STREAM);
-  frameCreator = BladeFrameCreator();
+  frameCreator = BladeFrameCreator(&dataAllocator);
 
 }
 
@@ -168,6 +171,8 @@ void prepRenderingUtils(){
   renderBuffer[CRENDER::BUFFER_SIZE - 3] = 0;
   renderBuffer[CRENDER::BUFFER_SIZE - 4] = 0;
   renderBuffer[CRENDER::BUFFER_SIZE - 5] = 0;
+
+  dataAllocator = FrameDataAllocator();
 }
 
 
@@ -197,11 +202,6 @@ void setup() {
   currIterator = &(frameIterator[0]);
   blade.currFrame = currIterator->GetFrame();
 
-  for(int i = 50; i < CRENDER::NUM_LEDS; i += 2){
-    primary[i] = CRGB::Red;
-    follower[i] = CRGB::Red;
-  }
-
 
   xTaskCreatePinnedToCore(
                     DAQ_WRAPPER, /* Task function. */
@@ -223,6 +223,7 @@ void setup() {
 
 void DAQ() {
   
+  dataAllocator.Refresh();
   comms.Populate();
   comms.Handle();
 

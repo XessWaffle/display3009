@@ -3,7 +3,6 @@
 
 #include "ArmFrame.h"
 
-
 struct ArmFrameNode{
   double theta = 0.0;
   ArmFrame *frame = NULL;
@@ -12,18 +11,20 @@ struct ArmFrameNode{
 };
 
 
-class BladeFrame{
+class BladeFrame : Destructible{
 
   public:
     BladeFrame();
 
     void Destroy();
+    void Clear();
 
     void OnFrameEntry();
 
     void AddArmFrame(ArmFrame* frame, double theta);
     bool UpdatePrimaryFrame(double theta);
     bool UpdateFollowerFrame(double theta);
+    ArmFrame *GetArmFrame(double theta);
     ArmFrame *GetPrimaryFrame();
     ArmFrame *GetFollowerFrame();
   

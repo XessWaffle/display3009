@@ -13,13 +13,21 @@ void BladeFrame::Destroy(){
   while(head->next != this->_root){
     ArmFrameNode* remove = head;
     head = head->next;
-    remove->frame->Destroy();
+    remove->frame->Mark();
     free(remove);
   }
 
-  this->_root->frame->Destroy();
+  this->_root->frame->Mark();
   free(this->_root);
+}
 
+void BladeFrame::Clear(){
+  ArmFrameNode *head = this->_root->next;
+
+  while(head != this->_root){
+    head->frame->Reset();
+    head = head->next;
+  }
 }
 
 void BladeFrame::OnFrameEntry(){
@@ -78,7 +86,7 @@ bool BladeFrame::UpdatePrimaryFrame(double theta){
 
   while(count < this->_frames) {
     if(this->_primary->theta <= theta && 
-      (this->_primary->next->theta < this->_primary->theta || this->_primary->next->theta > theta))
+      (this->_primary->next->theta <= this->_primary->theta || this->_primary->next->theta > theta))
         break;
     this->_primary = this->_primary->next;
     count++;
@@ -103,7 +111,7 @@ bool BladeFrame::UpdateFollowerFrame(double theta){
 
   while(count < this->_frames) {
     if(this->_follower->theta <= followerTheta && 
-      (this->_follower->next->theta < this->_follower->theta || this->_follower->next->theta > followerTheta))
+      (this->_follower->next->theta <= this->_follower->theta || this->_follower->next->theta > followerTheta))
         break;
     this->_follower = this->_follower->next; 
     count++;
@@ -111,6 +119,24 @@ bool BladeFrame::UpdateFollowerFrame(double theta){
 
   return this->_follower != tempFollower;
 
+}
+
+ArmFrame *BladeFrame::GetArmFrame(double theta){
+  while(theta < 0) theta += TWO_PI;
+  while(theta >= TWO_PI) theta -= TWO_PI;
+  
+  ArmFrameNode *head = this->_root;
+
+  int count = 0;
+
+  while(count < this->_frames) {
+    if(head->theta == theta)
+        return head->frame;
+    head = head->next;
+    count++;
+  }
+
+  return NULL;
 }
  
 ArmFrame *BladeFrame::GetPrimaryFrame(){

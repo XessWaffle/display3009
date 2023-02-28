@@ -5,6 +5,8 @@
 #define CRENDER Constants::RENDER
 #define CCOMMS Constants::COMMS
 #define CVAL Constants::VALUE
+#define CALLOC Constants::ALLOCATION
+
 
 #include <stdint.h>
 
@@ -77,5 +79,9 @@ namespace Constants{
   namespace VALUE{
     static const int MHZ      = 1000000;
     static const float MICROS = 0.000001;
+  }
+
+  namespace ALLOCATION{
+    static const int ALLOCATABLE_DESTRUCTIBLES = 2000;
   }
 };

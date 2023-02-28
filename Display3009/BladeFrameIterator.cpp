@@ -22,13 +22,12 @@ void BladeFrameIterator::Destroy(){
   int removed = 0;
 
   while(removed < this->_frames){
-    remove->frame->Destroy();
+    remove->frame->Mark();
     head = head->next;
     free(remove);
     remove = head;
     removed++;
   }
-
 }
 
 
@@ -108,7 +107,6 @@ bool BladeFrameIterator::Step(){
 
         this->_frameSet->prev = NULL;
         
-        remove->frame->Destroy();
         free(remove);
         this->_frames--;
       }

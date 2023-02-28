@@ -5,7 +5,7 @@
 
 class BladeFrameCreator{
   public:
-    BladeFrameCreator();
+    BladeFrameCreator(FrameDataAllocator *dataAllocator);
 
     bool StageFrame(int sectors);
     bool StageArm(int sector);
@@ -15,6 +15,8 @@ class BladeFrameCreator{
     BladeFrame *CommitFrame();
 
   private:
+    FrameDataAllocator *_allocator;
+
     BladeFrame *_stagedFrame = NULL;
     ArmFrame *_stagedArm = NULL;
 
