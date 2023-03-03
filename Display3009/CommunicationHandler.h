@@ -6,18 +6,17 @@
 struct InstructionNode{
   uint8_t instByte;
   union{  
-    uint8_t buff[16];
-    int data[4] = {0,0,0,0};
+    uint8_t buff[12];
+    int data[3] = {0,0,0};
   };
-  int byteCounter = 0;
-  WiFiClient *client;
+  uint8_t byteCounter = 0;
 
   InstructionNode *next;
 };
 
 struct HandlerNode{
   uint8_t instByte;
-  int bytes;
+  uint8_t bytes;
   void (*handler)(InstructionNode*) = NULL;
 
   HandlerNode *next;
@@ -26,24 +25,35 @@ struct HandlerNode{
 class CommunicationHandler{
   public:
     CommunicationHandler();
+    CommunicationHandler(uint8_t id);
 
-    void SetHandler(uint8_t inst, void (*handler)(InstructionNode*), int requiredBytes);
+    void SetHandler(uint8_t inst, void (*handler)(InstructionNode*), uint8_t requiredBytes);
 
-    void OnRefresh();
+    virtual void OnRefresh();
     void OnDisconnect();
 
-    void Handle();
-    void Populate();
+    void Handle(int instructions = 1);
+    bool Populate();
+
+    WiFiClient *Client();
+
+    int StagedInstructions();
   
-  private:
+  protected:
+    uint8_t PeekLastInstruction();
     void SendInstruction(const char* instStr, uint8_t inst);
     void Connect();
     HandlerNode *GetInstructionHandler(uint8_t instByte);
 
-  private:
+  protected:
     WiFiClient _client;
+
+  private:
     InstructionNode *_headInst, *_lastInst, *_stagedInst = NULL;
     HandlerNode *_head, *_last, *_stagedHandler = NULL;
+    
+    uint8_t _id = 1;
+    int _staged = 0;
 };
 
 #endif

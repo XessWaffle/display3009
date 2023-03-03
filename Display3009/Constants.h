@@ -65,14 +65,17 @@ namespace Constants{
     static const uint8_t ANIMATION     = createWriteInstruction(0x06);
     static const uint8_t FPS           = createWriteInstruction(0x07);
     static const uint8_t MULTIPLIER    = createWriteInstruction(0x08);
+    static const uint8_t PROP_FCNS     = 8;
+    static const uint8_t PROPS_ID      = 1;
+
     static const uint8_t STAGE_FRAME   = createWriteInstruction(0x09);
     static const uint8_t STAGE_ARM     = createWriteInstruction(0x0A);
     static const uint8_t SET_LED       = createWriteInstruction(0x0B);
     static const uint8_t SET_LEDS      = createWriteInstruction(0x0E);
     static const uint8_t COMMIT_ARM    = createWriteInstruction(0x0C);
     static const uint8_t COMMIT_FRAME  = createWriteInstruction(0x0D);
-    static const uint8_t NUM_INST      = 14;
-    static const uint8_t ID            = 1;
+    static const uint8_t FRAME_FCNS    = 6;
+    static const uint8_t FRAME_CLS     = 2;
 
   };
 
@@ -82,6 +85,6 @@ namespace Constants{
   }
 
   namespace ALLOCATION{
-    static const int ALLOCATABLE_DESTRUCTIBLES = 2000;
+    static const int ALLOCATABLE_DESTRUCTIBLES = 500;
   }
 };

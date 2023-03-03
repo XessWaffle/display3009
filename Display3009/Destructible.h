@@ -11,6 +11,6 @@ class Destructible{
     private:
 
         bool _destroyed;
-}
+};
 
 #endif

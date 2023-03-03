@@ -2,31 +2,23 @@
 
 
 ArmFrame::ArmFrame(){
-
-}
-
-ArmFrame::ArmFrame(int numLeds){
-  this->_numLeds = numLeds;
-  this->_leds = (struct CRGB*) malloc(sizeof(struct CRGB) * numLeds);
   this->Reset();
 }
 
 void ArmFrame::SetLED(int led, CRGB color){
-  if(led >= 0 && led < this->_numLeds)
+  if(led >= 0 && led < CRENDER::NUM_LEDS)
     this->_leds[led] = color;
 }
 
-void ArmFrame::Destroy(){
-  free(this->_leds);
-}
+void ArmFrame::Destroy(){}
 
 void ArmFrame::Reset(){
-  for(int i = 0; i < this->_numLeds; i++)
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++)
     this->_leds[i] = CRGB::Black;
 }
 
 void ArmFrame::Trigger(struct CRGB *mod){
-  for(int i = 0; i < this->_numLeds; i++){
+  for(int i = 0; i < CRENDER::NUM_LEDS; i++){
     mod[i] = this->_leds[i];
   }
 }

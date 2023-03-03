@@ -11,7 +11,7 @@ struct ArmFrameNode{
 };
 
 
-class BladeFrame : Destructible{
+class BladeFrame : public Destructible{
 
   public:
     BladeFrame();

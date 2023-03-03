@@ -1,10 +1,11 @@
 #ifndef BLADE_FRAME_CREATOR_H
 #define BLADE_FRAME_CREATOR_H
 
-#include "BladeFrame.h"
+#include "FrameDataAllocator.h"
 
 class BladeFrameCreator{
   public:
+    BladeFrameCreator();
     BladeFrameCreator(FrameDataAllocator *dataAllocator);
 
     bool StageFrame(int sectors);

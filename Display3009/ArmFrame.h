@@ -2,13 +2,14 @@
 #define ARM_FRAME_H
 
 #include <FastLED.h>
+#include "Constants.h"
+#include "Destructible.h"
 
-class ArmFrame : Destructible{
+class ArmFrame : public Destructible{
 
   public:
 
     ArmFrame();
-    ArmFrame(int numLeds);
 
     void SetLED(int led, struct CRGB color);
     
@@ -18,8 +19,7 @@ class ArmFrame : Destructible{
     void Trigger(struct CRGB *mod);
 
   private:
-    int _numLeds;
-    struct CRGB *_leds;
+    struct CRGB _leds[CRENDER::NUM_LEDS];
 
 };
 

@@ -6,7 +6,11 @@ CommunicationHandler::CommunicationHandler(){
 
 }
 
-void CommunicationHandler::SetHandler(uint8_t inst, void (*handler)(InstructionNode*), int requiredBytes){
+CommunicationHandler::CommunicationHandler(uint8_t id){
+  this->_id = id;
+}
+
+void CommunicationHandler::SetHandler(uint8_t inst, void (*handler)(InstructionNode*), uint8_t requiredBytes){
   HandlerNode *instNode = (HandlerNode*) malloc(sizeof(HandlerNode));
   instNode->handler = handler;
   instNode->instByte = inst;
@@ -23,40 +27,31 @@ void CommunicationHandler::SetHandler(uint8_t inst, void (*handler)(InstructionN
 }
 
 void CommunicationHandler::OnRefresh(){
-  this->_client.write(CCOMMS::NUM_INST);
-  this->SendInstruction("throttle", CCOMMS::THROTTLE);
-  this->SendInstruction("start", CCOMMS::START);
-  this->SendInstruction("stop", CCOMMS::STOP);
-  this->SendInstruction("test", CCOMMS::TEST);
-  this->SendInstruction("state", CCOMMS::STATE);
-  this->SendInstruction("anim", CCOMMS::ANIMATION);
-  this->SendInstruction("fps", CCOMMS::FPS);
-  this->SendInstruction("mult", CCOMMS::MULTIPLIER);
-  this->SendInstruction("stage-fr", CCOMMS::STAGE_FRAME);
-  this->SendInstruction("stage-ar", CCOMMS::STAGE_ARM);
-  this->SendInstruction("led", CCOMMS::SET_LED);
-  this->SendInstruction("leds", CCOMMS::SET_LEDS);
-  this->SendInstruction("commit-ar", CCOMMS::COMMIT_ARM);
-  this->SendInstruction("commit-fr", CCOMMS::COMMIT_FRAME);
 }
 
 void CommunicationHandler::OnDisconnect(){
   this->_client.stop();
 }
 
-void CommunicationHandler::Handle(){
-  if(this->_headInst != NULL){
-    HandlerNode *instHandler = this->GetInstructionHandler(this->_headInst->instByte);
-    if(instHandler != NULL)
-      (*(instHandler->handler))(this->_headInst);
+void CommunicationHandler::Handle(int instructions){
+  for(int i = 0; i < instructions; i++){
+    if(this->_headInst != NULL){
 
-    InstructionNode *remove = this->_headInst;
-    this->_headInst = this->_headInst->next;
-    free(remove);
+      HandlerNode *instHandler = this->GetInstructionHandler(this->_headInst->instByte);
+      if(instHandler != NULL)
+        (*(instHandler->handler))(this->_headInst);
+
+      InstructionNode *remove = this->_headInst;
+      this->_headInst = this->_headInst->next;
+      free(remove);
+      _staged--;
+    } else {
+      return;
+    }
   }
 }
 
-void CommunicationHandler::Populate(){
+bool CommunicationHandler::Populate(){
   if(!this->_client.connected())
     this->Connect();
 
@@ -74,11 +69,10 @@ void CommunicationHandler::Populate(){
         standardInst = true;
       }
 
-      if(standardInst) return;
+      if(standardInst) return true;
 
       _stagedInst = (InstructionNode*) malloc(sizeof(InstructionNode));
       _stagedInst->next = NULL;
-      _stagedInst->client = &(this->_client);
 
       this->_stagedHandler = this->GetInstructionHandler(byte);
 
@@ -104,10 +98,31 @@ void CommunicationHandler::Populate(){
         this->_lastInst = _stagedInst;
       }
       _stagedInst = NULL;
+      _staged++;
     }
 
+    return true;
   }
+
+  return false;
 }
+
+WiFiClient *CommunicationHandler::Client(){
+  return &(this->_client);
+}
+
+int CommunicationHandler::StagedInstructions(){
+  return _staged;
+}
+
+
+uint8_t CommunicationHandler::PeekLastInstruction(){
+  if(_staged > 0)
+    return this->_lastInst->instByte;
+  
+  return (uint8_t) 0xFF;
+}
+
 
 void CommunicationHandler::SendInstruction(const char* instStr, uint8_t inst){
   this->_client.print(instStr);
@@ -117,7 +132,7 @@ void CommunicationHandler::SendInstruction(const char* instStr, uint8_t inst){
 
 void CommunicationHandler::Connect(){
   if (this->_client.connect(CCOMMS::XESSAMD, CCOMMS::PORT)) {
-    this->_client.write((uint8_t) CCOMMS::ID);
+    this->_client.write((uint8_t) this->_id);
   }
 }
 

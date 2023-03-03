@@ -5,8 +5,8 @@
 #include "BladeManager.h" 
 #include "BladeFrameIterator.h"
 #include "BladeFrameCreator.h"
-#include "FrameDataAllocator.h"
-#include "CommunicationHandler.h"
+#include "BladePropertiesHandler.h"
+#include "FrameTransferHandler.h"
 
 // Contains all volatile variables
 struct Blade{
@@ -33,7 +33,10 @@ FrameDataAllocator dataAllocator;
 TaskHandle_t DAQ_TASK, DISP_TASK;
 SemaphoreHandle_t bladeMutex = xSemaphoreCreateMutex();
 
-CommunicationHandler comms = CommunicationHandler();
+BladePropertiesHandler comms = BladePropertiesHandler();
+FrameTransferHandler frameComms[CCOMMS::FRAME_CLS];
+
+long interval = millis();
 
 void prepCommunications(){
   comms.SetHandler(CCOMMS::START, &START, 0);
@@ -44,12 +47,17 @@ void prepCommunications(){
   comms.SetHandler(CCOMMS::ANIMATION, &ANIMATION, sizeof(int));
   comms.SetHandler(CCOMMS::FPS, &FPS, sizeof(int));
   comms.SetHandler(CCOMMS::MULTIPLIER, &MULTIPLIER, sizeof(int));
-  comms.SetHandler(CCOMMS::STAGE_FRAME, &STAGE_FRAME, sizeof(int));
-  comms.SetHandler(CCOMMS::STAGE_ARM, &STAGE_ARM, sizeof(int));
-  comms.SetHandler(CCOMMS::SET_LED, &SET_LED, 2 * sizeof(int));
-  comms.SetHandler(CCOMMS::SET_LEDS, &SET_LEDS, 3 * sizeof(int));
-  comms.SetHandler(CCOMMS::COMMIT_ARM, &COMMIT_ARM, 0);
-  comms.SetHandler(CCOMMS::COMMIT_FRAME, &COMMIT_FRAME, 0);
+
+  for(int i = 0; i < CCOMMS::FRAME_CLS; i++){
+      frameComms[i] = FrameTransferHandler(i + 2);
+      frameComms[i].SetHandler(CCOMMS::STAGE_FRAME, &STAGE_FRAME, sizeof(int));
+      frameComms[i].SetHandler(CCOMMS::STAGE_ARM, &STAGE_ARM, sizeof(int));
+      frameComms[i].SetHandler(CCOMMS::SET_LED, &SET_LED, 2 * sizeof(int));
+      frameComms[i].SetHandler(CCOMMS::SET_LEDS, &SET_LEDS, 3 * sizeof(int));
+      frameComms[i].SetHandler(CCOMMS::COMMIT_ARM, &COMMIT_ARM, 0);
+      frameComms[i].SetHandler(CCOMMS::COMMIT_FRAME, &COMMIT_FRAME, 0);
+  }
+
 }
 
 void prepAnimations(){
@@ -202,11 +210,10 @@ void setup() {
   currIterator = &(frameIterator[0]);
   blade.currFrame = currIterator->GetFrame();
 
-
   xTaskCreatePinnedToCore(
                     DAQ_WRAPPER, /* Task function. */
                     "Data",      /* name of task. */
-                    16384,        /* Stack size of task */
+                    32768,        /* Stack size of task */
                     NULL,        /* parameter of the task */
                     2,           /* priority of the task */
                     &DAQ_TASK,   /* Task handle to keep track of created task */
@@ -225,7 +232,10 @@ void DAQ() {
   
   dataAllocator.Refresh();
   comms.Populate();
-  comms.Handle();
+
+  for(int i = 0; i < CCOMMS::FRAME_CLS; i++){
+    frameComms[i].Populate();
+  }
 
   BladeData *data = bladeManager.Step();
   bool frameChange = currIterator->Step();
@@ -242,13 +252,12 @@ void DAQ() {
     data->trigger = false;
   }
   xSemaphoreGive(bladeMutex);
+  
 
   vTaskDelay(1);
-
 }
 
 void DISP(long step, bool updatePrimary) {
- 
   int brightness = 0;
 
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
@@ -327,7 +336,7 @@ void STOP(InstructionNode *node){
 }
 
 void TEST(InstructionNode *node){
-  node->client->print("Ready!\r");
+  comms.Client()->print("Ready!\r");
 }
 
 void THROTTLE(InstructionNode *node){
@@ -344,7 +353,7 @@ void THROTTLE(InstructionNode *node){
 void STATE(InstructionNode *node){
   char buff[15];  
   sprintf(buff, "%d\r", bladeManager.GetState());
-  node->client->print(buff);
+  comms.Client()->print(buff);
 }
 
 void ANIMATION(InstructionNode *node){
@@ -357,6 +366,7 @@ void ANIMATION(InstructionNode *node){
   xSemaphoreTake(bladeMutex, portMAX_DELAY);
     
   currIterator = &(frameIterator[animation]);
+  currIterator->ForceStep();
   blade.currFrame = currIterator->GetFrame();
 
   xSemaphoreGive(bladeMutex);
@@ -407,8 +417,9 @@ void COMMIT_FRAME(InstructionNode *node){
   BladeFrame *committed = frameCreator.CommitFrame();
   frameIterator[CRENDER::NUM_ANIMATIONS - 1].AddFrame(committed);
 
-  xSemaphoreGive(bladeMutex);  
-}
+  xSemaphoreGive(bladeMutex);
+}  
+
 
 void loop(){
   vTaskDelete(NULL);

@@ -106,7 +106,6 @@ bool BladeFrameIterator::Step(){
         this->_frameSet = this->_frameDisplay;
 
         this->_frameSet->prev = NULL;
-        remove->frame->Mark();
         free(remove);
         this->_frames--;
       }
@@ -123,3 +122,42 @@ bool BladeFrameIterator::Step(){
   }
   return frameChanged;
 } 
+
+bool BladeFrameIterator::ForceStep(){
+
+  bool frameChanged = false;  
+
+  int prevId = this->_frameDisplay->id;
+
+  if(this->_frameCounter >= this->_frames - 1){
+    this->_forward = !this->_forward;
+    this->_frameCounter = 0;
+  }
+
+  if(this->_type == animationType::LOOP){
+    this->_frameDisplay = this->_frameDisplay->next;
+  } else if(this->_type == animationType::REWIND){
+    this->_frameDisplay = this->_forward ? this->_frameDisplay->next : this->_frameDisplay->prev;
+  } else if(this->_type == animationType::STREAM){
+    if(this->_frameDisplay->next != NULL){
+      BladeFrameNode *remove = this->_frameDisplay;
+
+      this->_frameDisplay = this->_frameDisplay->next;
+      this->_frameSet = this->_frameDisplay;
+
+      this->_frameSet->prev = NULL;
+      free(remove);
+      this->_frames--;
+    }
+  }
+
+  int currId = this->_frameDisplay->id;
+
+  frameChanged = prevId != currId;
+  this->_frameCounter++;
+
+  if(frameChanged)
+    this->_frameDisplay->frame->OnFrameEntry();
+  
+  return frameChanged;
+}

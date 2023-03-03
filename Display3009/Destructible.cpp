@@ -1,14 +1,16 @@
 
 #include "Destructible.h"
 
-Destructible(){
+Destructible::Destructible(){
     this->_destroyed = false;
 }
 
-void Mark(){
+void Destructible::Destroy(){}
+
+void Destructible::Mark(){
     this->_destroyed = true;
 }
 
-bool Marked(){
+bool Destructible::Marked(){
     return this->_destroyed;
 }

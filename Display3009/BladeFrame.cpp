@@ -8,17 +8,16 @@ BladeFrame::BladeFrame(){
 }
 
 void BladeFrame::Destroy(){
-  ArmFrameNode *head = this->_root->next;
+  ArmFrameNode *head = this->_root;
 
-  while(head->next != this->_root){
+  int i = 0;
+  while(i < this->_frames){
     ArmFrameNode* remove = head;
     head = head->next;
     remove->frame->Mark();
     free(remove);
+    i++;
   }
-
-  this->_root->frame->Mark();
-  free(this->_root);
 }
 
 void BladeFrame::Clear(){
@@ -122,9 +121,6 @@ bool BladeFrame::UpdateFollowerFrame(double theta){
 }
 
 ArmFrame *BladeFrame::GetArmFrame(double theta){
-  while(theta < 0) theta += TWO_PI;
-  while(theta >= TWO_PI) theta -= TWO_PI;
-  
   ArmFrameNode *head = this->_root;
 
   int count = 0;

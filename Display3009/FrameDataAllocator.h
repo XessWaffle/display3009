@@ -2,6 +2,8 @@
 #define FRAME_DATA_ALLOCATOR_H
 
 #include "Constants.h"
+#include "ArmFrame.h"
+#include "BladeFrame.h"
 
 class FrameDataAllocator{
     public:
@@ -10,12 +12,20 @@ class FrameDataAllocator{
         ArmFrame *CreateArmFrame();
         BladeFrame *CreateBladeFrame();
 
-        bool Destroy(Destuctible *frame);
+        int AllocatedDestructibles();
+
+        bool Destroy(Destructible *frame);
 
         void Refresh();     
 
     private:
+        bool Destroy(int index);
+
+    private:
         Destructible *_data[CALLOC::ALLOCATABLE_DESTRUCTIBLES];
-}
+        int _manageIndex;
+
+        int _allocated;
+};
 
 #endif

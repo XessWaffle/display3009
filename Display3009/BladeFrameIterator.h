@@ -28,6 +28,7 @@ class BladeFrameIterator{
     void SetFrameRate(double rate);
 
     bool Step();
+    bool ForceStep();
 
   private:
 
