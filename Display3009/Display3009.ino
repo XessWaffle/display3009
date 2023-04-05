@@ -165,7 +165,7 @@ void prepRenderingUtils(){
   followerSPI = new SPIClass(VSPI);
 
   pinMode(primarySPI->pinSS(), OUTPUT); // VSPI SS
-  pinMode(followerSPI->pinSS(), OUTPUT); // HSPI SS
+  pinMode(followerSPI->pinSS(), OUTPUT); // VSPI SS
 
   primarySPI->begin();
   followerSPI->begin();
@@ -181,16 +181,13 @@ void prepRenderingUtils(){
   renderBuffer[CRENDER::BUFFER_SIZE - 5] = 0;
 
   dataAllocator = FrameDataAllocator();
+
 }
 
 
 void setup() {
 
   Serial.begin(115200);
-
-  FastLED.addLeds<SK9822, COPS::DATA_PIN_PRIMARY, COPS::CLOCK_PIN_PRIMARY, BGR, DATA_RATE_MHZ(40)>(primary, CRENDER::NUM_LEDS);  // BGR ordering is typical
-  FastLED.addLeds<SK9822, COPS::DATA_PIN_FOLLOWER, COPS::CLOCK_PIN_FOLLOWER, BGR, DATA_RATE_MHZ(40)>(follower, CRENDER::NUM_LEDS);  // BGR ordering is typical
-  //FastLED.setMaxRefreshRate(0);
 
   WiFi.begin(CCOMMS::SSID, CCOMMS::PWD);
 
@@ -320,7 +317,7 @@ void RENDER(bool refreshPrimary, uint8_t brightness){
 
   }
 
-  arm->beginTransaction(SPISettings(60 * CVAL::MHZ, MSBFIRST, SPI_MODE0));
+  arm->beginTransaction(SPISettings(50 * CVAL::MHZ, MSBFIRST, SPI_MODE0));
   {
     arm->transfer(renderBuffer, CRENDER::BUFFER_SIZE);
   }

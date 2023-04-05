@@ -32,11 +32,11 @@ namespace Constants{
   };
 
   namespace OPS{
-    static const int DATA_PIN_FOLLOWER  = 23; // VSPI
-    static const int CLOCK_PIN_FOLLOWER = 18;
-    static const int DATA_PIN_PRIMARY   = 13; // HSPI
-    static const int CLOCK_PIN_PRIMARY  = 14;
-    static const int MOTOR_PIN          = 25;
+    static const int PRIMARY_DATA_PIN     = 13; // HSPI
+    static const int PRIMARY_CLOCK_PIN    = 14;
+    static const int FOLLOWER_DATA_PIN    = 23; // VSPI
+    static const int FOLLOWER_CLOCK_PIN   = 18;
+    static const int MOTOR_PIN            = 25;
   };
 
   namespace RENDER{
@@ -53,7 +53,7 @@ namespace Constants{
     static const char* SSID            = "3009 Xess";
     static const char* PWD             = "dingd0ngditch";
     static const int PORT              = 80;
-    static const char* XESSAMD         = "192.168.137.202";
+    static const char* XESSAMD         = "192.168.137.43";
     static const uint8_t MESSAGE_PAUSE = 0xFF;
     static const uint8_t REFRESH       = 0xFF;
     static const uint8_t DISCONNECT    = 0xFE;
