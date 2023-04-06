@@ -1,19 +1,13 @@
 #include "BladeFrameIterator.h"
 
 BladeFrameIterator::BladeFrameIterator(){
-  this->_type = animationType::LOOP;
-  this->_frames = 0;
-  this->_frameSet = NULL;
-  this->_frameDisplay = NULL;
   this->_lastFrameUpdate = millis();
+  this->_animation = NULL;
 }
 
-BladeFrameIterator::BladeFrameIterator(animationType type){
-  this->_frameSet = NULL;
-  this->_frameDisplay = NULL;
-  this->_type = type;
-  this->_frames = 0;
+BladeFrameIterator::BladeFrameIterator(FILE *animation){
   this->_lastFrameUpdate = millis();
+  this->_animation = animation;
 } 
 
 void BladeFrameIterator::Destroy(){
@@ -30,42 +24,11 @@ void BladeFrameIterator::Destroy(){
   }
 }
 
+void BladeFrameIterator::SetFile(FILE *animation){
 
-void BladeFrameIterator::AddFrame(BladeFrame* frame){
-  BladeFrameNode *frameNode = (BladeFrameNode*) malloc(sizeof(BladeFrameNode)), *prev = NULL;
+  //TODO Reset frames and loader
 
-  frameNode->id = this->_frames;
-  frameNode->frame = frame;
-  frameNode->next = NULL;
-  frameNode->prev = NULL;
-
-  int insert = 0;
-
-  if(this->_frameSet == NULL){
-    this->_frameSet = frameNode;
-    this->_frameDisplay = frameNode;
-    this->_frameLast = frameNode;
-
-    if(this->_type != animationType::STREAM){
-      frameNode->prev = frameNode;
-      frameNode->next = frameNode;
-    }
-  } else {
-    if(this->_type != animationType::STREAM){
-      prev = this->_frameSet->prev;
-      prev->next = frameNode;
-      frameNode->prev = prev;
-      frameNode->next = this->_frameSet;
-      this->_frameSet->prev = frameNode;
-    } else {
-      this->_frameLast->next = frameNode;
-      frameNode->prev = this->_frameLast;
-      this->_frameLast = frameNode;
-    }
-  }
-
-  this->_frames++;
-
+  this->_animation = animation;
 }
 
 BladeFrame *BladeFrameIterator::GetFrame(){
@@ -74,11 +37,6 @@ BladeFrame *BladeFrameIterator::GetFrame(){
   return NULL;
 }
 
-
-void BladeFrameIterator::SetFrameRate(double rate){
-  this->_frameRate = rate;
-  this->_frameWait = 1000/rate;
-}
 
 bool BladeFrameIterator::Step(){
   long currentTime = millis();

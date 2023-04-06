@@ -44,6 +44,9 @@ namespace Constants{
     static const int NUM_ANIMATIONS    = 7;
 
     static const int BUFFER_SIZE       = 297;
+
+    static const int FRAME_NODES       = 3;
+    static const float FRAME_RATE      = 30.0;
   };
 
   namespace COMMS{

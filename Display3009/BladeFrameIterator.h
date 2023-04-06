@@ -1,9 +1,10 @@
 #ifndef BLADE_FRAME_ITERATOR_H
 #define BLADE_FRAME_ITERATOR_H
 
-#define DEFAULT_FRAME_RATE 30.0
-
+#include "Constants.h"
 #include "BladeFrame.h"
+#include "FS.h"
+
 
 struct BladeFrameNode{
   int id;
@@ -15,29 +16,25 @@ struct BladeFrameNode{
 class BladeFrameIterator{
   public:
 
-    typedef enum {LOOP, REWIND, STREAM} animationType;
-
     BladeFrameIterator();
-    BladeFrameIterator(animationType type);
+    BladeFrameIterator(FILE *animation);
 
     void Destroy();
 
-    void AddFrame(BladeFrame* frame);
-    BladeFrame *GetFrame();
+    void SetFile(FILE *animation);
 
-    void SetFrameRate(double rate);
+    BladeFrame *GetFrame();
 
     bool Step();
     bool ForceStep();
 
   private:
 
-    BladeFrameNode *_frameSet, *_frameDisplay, *_frameLast;
-    int _frames, _frameCounter;
-    long _lastFrameUpdate, _frameWait = 1000/DEFAULT_FRAME_RATE;
-    double _frameRate = DEFAULT_FRAME_RATE;
-    animationType _type;
-    bool _forward = true;
+    BladeFrameNode *_frameDisplay;
+    long _lastFrameUpdate, _frameWait = 1000/CRENDER::FRAME_RATE;
+    double _frameRate = CRENDER::FRAME_RATE;
+
+    FILE *_animation = NULL;
 
 };
 
